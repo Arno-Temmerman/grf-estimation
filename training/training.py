@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+import matplotlib.pyplot as plt
 
 import os
 
@@ -210,3 +211,40 @@ for comp in NEW_LABELS:
     print('Starting training process')
     base_regressors[comp].train_(X_train_tensor, y_train_tensor)
 
+########################
+# EVALUATING THE MODEL #
+########################
+def print_metrics(y_test, y_pred):
+    print('Performance on the test set:')
+
+    # MSE
+    loss = nn.MSELoss()
+    test_loss = loss(y_pred, y_test)
+    print(f'MSE = {test_loss.item():.4f}')
+
+    y_test = y_test.detach().squeeze().numpy()
+    y_pred = y_pred.detach().squeeze().numpy()
+
+    # Correlation
+    r = np.corrcoef(y_test, y_pred)
+    print('r =', r[0, 1])
+
+    # Scatterplot
+    plt.figure(figsize=(4, 4))
+    plt.xlabel('y_test')
+    plt.ylabel('y_pred')
+    plt.scatter(y_test, y_pred)
+    plt.show()
+
+X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
+
+for comp, base_regressor in base_regressors.items():
+    print("Evaluation model for", comp)
+    base_regressor.eval()   # put model in evaluation stage
+    y_pred_tensor = base_regressor(X_test_tensor)
+
+    y_test_tensor = torch.tensor(y_test[comp].to_numpy().reshape((-1, 1)),  dtype=torch.float32)
+
+    print_metrics(y_test_tensor, y_pred_tensor)
+
+    base_regressor.save()
