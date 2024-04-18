@@ -4,8 +4,15 @@ import pandas as pd
 from pandas import DataFrame
 
 import numpy as np
+import torch
+import torch.nn as nn
+
 
 import os
+
+from sklearn.model_selection import train_test_split
+
+from models.base_regressor import BaseRegressor
 
 
 #######################
@@ -149,4 +156,57 @@ def filter(df):
 
 df = filter(df)
 
+
+####################
+# TRAIN-TEST SPLIT #
+####################
+df_test, df_train = train_test_split(df, test_size=0.2, random_state=42)
+
+
+############################
+# FEATURE/LABEL EXTRACTION #
+############################
+def extract_features(df):
+    # Drop labels
+    X = df.drop(columns=NEW_LABELS, axis=1)
+
+    # Drop pressure columns
+    P_cols = [col for col in X if col.startswith('P')]
+    X = X.drop(columns=P_cols, axis=1)
+
+    # Drop masks
+    X = X.drop(columns=MASKS, axis=1)
+
+    return X
+
+# Features
+X_train = extract_features(df_train)
+X_test  = extract_features(df_test)
+
+# Labels
+y_train = df_train[NEW_LABELS]
+y_test = df_test[NEW_LABELS]
+##################
+# MODEL CREATION #
+##################
+nr_of_features = np.shape(X_train)[1]
+hidden_size = 16
+
+
+##################
+# MODEL TRAINING #
+##################
+# Convert DataFrames to tensors
+X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+
+base_regressors = {}
+y_test_dict = {}
+for comp in NEW_LABELS:
+    y_train_tensor = torch.tensor(y_train[comp].to_numpy().reshape((-1, 1)), dtype=torch.float32)
+
+    base_regressors[comp] = BaseRegressor(nr_of_features, hidden_size, comp)
+    print('Created a model for', comp, 'with', nr_of_features, 'input neurons,', hidden_size, ' hidden neurons and 1 output neuron.')
+
+    print('Starting training process')
+    base_regressors[comp].train_(X_train_tensor, y_train_tensor)
 
