@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 
 import os
 
+from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 
 from models.base_regressor import BaseRegressor
@@ -187,6 +188,24 @@ X_test  = extract_features(df_test)
 # Labels
 y_train = df_train[NEW_LABELS]
 y_test = df_test[NEW_LABELS]
+
+
+################################
+# PRINCIPAL COMPONENT ANALYSIS #
+################################
+# Fit PCA model to the training data for capturing 99% of the variance
+pca = PCA(n_components=0.99, svd_solver='full')
+pca.fit(X_train)
+
+# Project the data from the old features to their principal components
+print('Number of features before PCA', X_train.shape[1])
+
+X_train = pca.transform(X_train)
+X_test  = pca.transform(X_test)
+
+print('Number of features after PCA', X_train.shape[1])
+
+
 ##################
 # MODEL CREATION #
 ##################
