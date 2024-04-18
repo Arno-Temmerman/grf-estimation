@@ -102,3 +102,51 @@ def read_gait_cycles():
     return df
 
 df = read_gait_cycles()
+
+
+############################################%###
+# LEFT VS. RIGHT FOOT -> MAIN VS. OTHER FOOT #
+##############################################
+NEW_LABELS = ['Fx','Fy','Fz', 'M']
+
+# Removes the distinction between left and right foot by creating a new DataFrame in terms of main_foot and other_foot
+def homogenize(df):
+    def rename_columns(df, main_foot, other_foot):
+        mapping = {col: col.replace("_" + main_foot, "")
+                           .replace("_" + other_foot, "_o")
+                   for col in df.columns}
+
+        return df.rename(columns=mapping)
+
+    # Create the new DataFrame
+    df_l = rename_columns(df, 'l', 'r')
+    df_r = rename_columns(df, 'r', 'l')
+    df_combined = pd.concat([df_l, df_r])
+
+    # Drop the target labels for other_foot
+    df_combined = df_combined.drop(columns=['Fx_o','Fy_o','Fz_o', 'M_o'])
+    return df_combined
+
+df = homogenize(df)
+
+
+#############
+# FILTERING #
+#############
+def filter(df):
+    # Ignore readings of force plate 1 (loose)
+    df = df[df['fp1'] == 0]
+
+    # Only keep masked rows
+    df = df[df['valid_mask_feet'] == 1]
+    # df = df[df['correct_mask_fp'] == 1] #ignore this mask for now
+    df = df[df['correct_mask_ins'] == 1]
+
+    # Removes rows for which no target label is available
+    df = df[(df['Ftot'] < 0.05) | (df['Fz'] != 0)]
+
+    return df
+
+df = filter(df)
+
+
