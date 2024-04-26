@@ -11,9 +11,12 @@ import matplotlib.pyplot as plt
 
 import os
 
+import joblib
+
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 
+from models.NRMSELoss import NRMSELoss
 from models.base_regressor import BaseRegressor
 
 
@@ -57,15 +60,12 @@ HEADER = LABELS + INPUTS + MASKS
 # LOADING THE DATA #
 ####################
 DATA_DIR = "../segmented_data/"
-SUBJECTS = ['RB']
-SCENES = ['FlatWalkStraight']
-TRIALS = ('FW walking')
 
-# Reads the csv-files in ./segmented_data of the SUBJECTS-SCENES-TRIALS combinations specified above
-def read_gait_cycles():
+# Reads the csv-files in ./segmented_data of the subjects-scenes-trials combinations specified above
+def read_gait_cycles(subjects, scenes, trials):
     # Adds the features of several past and future timesteps to each row
     def expand_timeframe(gait_cycle):
-        NR_OF_TIMESTEPS = 5
+        NR_OF_TIMESTEPS = 6
 
         past   = [ 2**i for i in range(NR_OF_TIMESTEPS)]
         future = [-2**i for i in range(NR_OF_TIMESTEPS)]
@@ -91,7 +91,7 @@ def read_gait_cycles():
 
     # Reads a single csv-file, expands the features and removes the buffers
     def read_gait_cycle(filepath):
-        gait_cycle = pd.read_csv(filepath, header=None, names=HEADER)
+        gait_cycle = pd.read_csv(filepath, header=0, names=HEADER)
         gait_cycle = expand_timeframe(gait_cycle)
         return remove_buffers(gait_cycle)
 
@@ -99,25 +99,23 @@ def read_gait_cycles():
     # Build up DataFrame of gait cyles by traversing the specified TRIALS
     df = DataFrame()
 
-    for subdirs in itertools.product(SUBJECTS, SCENES):
+    for subdirs in itertools.product(subjects, scenes):
         path = DATA_DIR + '/'.join(subdirs)
 
         for file in os.listdir(path):
-            if file.startswith(TRIALS) and file.endswith('.csv'):
+            if file.endswith('.csv') and (file.startswith(trials) or trials == ('all')):
+                print("Reading", file)
                 filepath = path + '/' + file
                 gait_cycle = read_gait_cycle(filepath)
+                gait_cycle['trial'] = file
                 df = pd.concat([df, gait_cycle])
 
     return df
 
-df = read_gait_cycles()
 
-
-############################################%###
+##############################################
 # LEFT VS. RIGHT FOOT -> MAIN VS. OTHER FOOT #
 ##############################################
-NEW_LABELS = ['Fx','Fy','Fz', 'M']
-
 # Removes the distinction between left and right foot by creating a new DataFrame in terms of main_foot and other_foot
 def homogenize(df):
     def rename_columns(df, main_foot, other_foot):
@@ -136,17 +134,15 @@ def homogenize(df):
     df_combined = df_combined.drop(columns=['Fx_o','Fy_o','Fz_o', 'M_o'])
     return df_combined
 
-df = homogenize(df)
-
 
 #############
 # FILTERING #
 #############
 def filter(df):
     # Ignore readings of force plate 1 (loose)
-    df = df[df['fp1'] == 0]
+    df = df[df['fp1'] != 1]
 
-    # Only keep masked rows
+    # # Only keep masked rows
     df = df[df['valid_mask_feet'] == 1]
     # df = df[df['correct_mask_fp'] == 1] #ignore this mask for now
     df = df[df['correct_mask_ins'] == 1]
@@ -154,15 +150,10 @@ def filter(df):
     # Removes rows for which no target label is available
     df = df[(df['Ftot'] < 0.05) | (df['Fz'] != 0)]
 
+    # Remove rows with non-available values
+    df = df.dropna()
+
     return df
-
-df = filter(df)
-
-
-####################
-# TRAIN-TEST SPLIT #
-####################
-df_test, df_train = train_test_split(df, test_size=0.2, random_state=42)
 
 
 ############################
@@ -170,7 +161,7 @@ df_test, df_train = train_test_split(df, test_size=0.2, random_state=42)
 ############################
 def extract_features(df):
     # Drop labels
-    X = df.drop(columns=NEW_LABELS, axis=1)
+    X = df.drop(columns=['Fx','Fy','Fz', 'M'], axis=1)
 
     # Drop pressure columns
     P_cols = [col for col in X if col.startswith('P')]
@@ -179,56 +170,33 @@ def extract_features(df):
     # Drop masks
     X = X.drop(columns=MASKS, axis=1)
 
+    # Drop source file
+    X = X.drop(columns=['trial'], axis=1)
+
     return X
-
-# Features
-X_train = extract_features(df_train)
-X_test  = extract_features(df_test)
-
-# Labels
-y_train = df_train[NEW_LABELS]
-y_test = df_test[NEW_LABELS]
 
 
 ################################
 # PRINCIPAL COMPONENT ANALYSIS #
 ################################
-# Fit PCA model to the training data for capturing 99% of the variance
-pca = PCA(n_components=0.99, svd_solver='full')
-pca.fit(X_train)
+def perform_pca(X_train, X_test):
+    # Fit PCA model to the training data for capturing 99% of the variance
+    pca = PCA(n_components=0.99, svd_solver='full')
+    pca.fit(X_train)
 
-# Project the data from the old features to their principal components
-print('Number of features before PCA', X_train.shape[1])
+    # Save the PCA model to a file
+    joblib.dump(pca, '../results/pca.pkl')
 
-X_train = pca.transform(X_train)
-X_test  = pca.transform(X_test)
+    # Project the data from the old features to their principal components
+    print('Number of features before PCA', X_train.shape[1])
 
-print('Number of features after PCA', X_train.shape[1])
+    X_train = pca.transform(X_train)
+    X_test = pca.transform(X_test)
 
+    print('Number of features after PCA', X_train.shape[1])
 
-##################
-# MODEL CREATION #
-##################
-nr_of_features = np.shape(X_train)[1]
-hidden_size = 16
+    return X_train, X_test
 
-
-##################
-# MODEL TRAINING #
-##################
-# Convert DataFrames to tensors
-X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
-
-base_regressors = {}
-y_test_dict = {}
-for comp in NEW_LABELS:
-    y_train_tensor = torch.tensor(y_train[comp].to_numpy().reshape((-1, 1)), dtype=torch.float32)
-
-    base_regressors[comp] = BaseRegressor(nr_of_features, hidden_size, comp)
-    print('Created a model for', comp, 'with', nr_of_features, 'input neurons,', hidden_size, ' hidden neurons and 1 output neuron.')
-
-    print('Starting training process')
-    base_regressors[comp].train_(X_train_tensor, y_train_tensor)
 
 ########################
 # EVALUATING THE MODEL #
@@ -236,10 +204,11 @@ for comp in NEW_LABELS:
 def print_metrics(y_test, y_pred):
     print('Performance on the test set:')
 
-    # MSE
-    loss = nn.MSELoss()
-    test_loss = loss(y_pred, y_test)
-    print(f'MSE = {test_loss.item():.4f}')
+    # NRMSE
+    range = torch.max(y_test) - torch.min(y_test)
+    loss = NRMSELoss(range)
+    test_loss = loss(y_test, y_pred)
+    print(f'NRMSE = {test_loss.item():.4f}')
 
     y_test = y_test.detach().squeeze().numpy()
     y_pred = y_pred.detach().squeeze().numpy()
@@ -249,21 +218,10 @@ def print_metrics(y_test, y_pred):
     print('r =', r[0, 1])
 
     # Scatterplot
-    plt.figure(figsize=(4, 4))
+    plt.figure(figsize=(3, 3))
     plt.xlabel('y_test')
     plt.ylabel('y_pred')
     plt.scatter(y_test, y_pred)
     plt.show()
 
-X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
 
-for comp, base_regressor in base_regressors.items():
-    print("Evaluation model for", comp)
-    base_regressor.eval()   # put model in evaluation stage
-    y_pred_tensor = base_regressor(X_test_tensor)
-
-    y_test_tensor = torch.tensor(y_test[comp].to_numpy().reshape((-1, 1)),  dtype=torch.float32)
-
-    print_metrics(y_test_tensor, y_pred_tensor)
-
-    base_regressor.save()
