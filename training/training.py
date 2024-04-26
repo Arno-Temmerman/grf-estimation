@@ -14,7 +14,7 @@ import os
 import joblib
 
 from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 
 from models.NRMSELoss import NRMSELoss
 from models.base_regressor import BaseRegressor
@@ -225,3 +225,51 @@ def print_metrics(y_test, y_pred):
     plt.show()
 
 
+####################
+# CROSS-VALIDATION #
+####################
+def cross_validate(hidden_size, X, y, n_splits, partition):
+    kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+    losses = []
+    correlations = []
+    fold = 0
+    for train_idx, val_idx in kf.split(X, partition):
+        fold += 1
+        print(f"Fold #{fold}")
+
+        # Make train-test split
+        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+
+        # Perform PCA
+        X_train, X_val = perform_pca(X_train, X_val)
+        nr_of_features = np.shape(X_train)[1]
+
+        # Convert to tensors
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+        X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train.to_numpy().reshape((-1, 1)), dtype=torch.float32)
+        y_val_tensor = torch.tensor(y_val.to_numpy().reshape((-1, 1)), dtype=torch.float32)
+
+        # Train the model
+        model = BaseRegressor('test', nr_of_features, [hidden_size])
+        model.train_(X_train_tensor, y_train_tensor)
+
+        # Instantiate the loss function
+        y_pred_tensor = model(X_val_tensor)
+        range = torch.max(y_val_tensor) - torch.min(y_val_tensor)
+        loss_function = NRMSELoss(range)
+
+        # Evaluate the model
+        model.eval()
+        val_loss = loss_function(y_val_tensor, y_pred_tensor).item()
+        losses.append(val_loss)
+
+        # Correlation
+        y_val = y_val_tensor.detach().squeeze().numpy()
+        y_pred = y_pred_tensor.detach().squeeze().numpy()
+        r = np.corrcoef(y_val, y_pred)[0, 1]
+        correlations.append(r)
+
+    return losses, correlations
