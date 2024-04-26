@@ -6,17 +6,24 @@ import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
+from models.NRMSELoss import NRMSELoss
+
+
 class BaseRegressor(nn.Module):
-    def __init__(self, input_size, hidden_size, component):
+    def __init__(self, component, input_size, hidden_sizes):
         super().__init__()
 
         OUTPUT_SIZE = 1
 
-        self.linear_tanh_stack = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
-            nn.Tanh(),
-            nn.Linear(hidden_size, OUTPUT_SIZE),
-        )
+        layers = []
+        prev_size = input_size
+        for size in hidden_sizes:
+            layers.append(nn.Linear(prev_size, size))
+            layers.append(nn.Sigmoid())
+            prev_size = size
+
+        layers.append(nn.Linear(prev_size, OUTPUT_SIZE))
+        self.linear_sigmoid_stack = nn.Sequential(*layers)
 
         self.component = component
         self.timestamp = time.strftime("%Y%m%d/%H%M%S", time.localtime())
@@ -25,12 +32,17 @@ class BaseRegressor(nn.Module):
 
 
     def forward(self, x):
-        return self.linear_tanh_stack(x)
+        return self.linear_sigmoid_stack(x)
 
 
     def train_(self, X, y):
         self.train() # train mode
-        loss_function = nn.MSELoss()
+
+        # Instantiate the loss function
+        norm_factor = (torch.max(y).item() - torch.min(y).item())
+        loss_function = NRMSELoss(norm_factor)
+
+        # Instantiate the optimizer
         optimizer = torch.optim.Adam(params=self.parameters(), lr=0.01)
 
         for epoch in range(100):
@@ -39,22 +51,22 @@ class BaseRegressor(nn.Module):
 
             # Compute the loss and its gradients
             y_pred = self(X)
-            loss = loss_function(y_pred, y)
+            loss = loss_function(y, y_pred)
             loss.backward()  # back propagation
 
             # Adjust the NN's weights and biases accordingly
             optimizer.step()
 
-            # Log the loss to TensorBoard
-            self.writer.add_scalar(f'Training/MSE', loss.item(), epoch)
+            if epoch % 20 == 0:
+                # Log the loss to TensorBoard
+                self.writer.add_scalar(f'Training/NRMSE', loss.item(), epoch)
+                # print(f'[epoch:{epoch}]: NRMSE = {loss}')
 
-            # Log the weights and biases to TensorBoard
-            for name, param in self.named_parameters():
-                self.writer.add_histogram(name, param.clone().cpu(), epoch)
-                self.writer.add_histogram(name + '/grad_norm', param.grad.data.norm(), epoch)
+                # Log the weights and biases to TensorBoard
+                for name, param in self.named_parameters():
+                    self.writer.add_histogram(name, param.clone().cpu(), epoch)
+                    self.writer.add_scalar(name + '/grad_norm', param.grad.data.norm(), epoch)
 
-            if epoch % 10 == 0:
-                print(f'[epoch:{epoch}]: MSE = {loss}')
 
     def save(self):
         with open(Path(f'../results/{self.component}/{self.timestamp}/{self.component}.pt'), 'wb') as output_file:
