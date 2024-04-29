@@ -256,13 +256,11 @@ def cross_validate(hidden_size, X, y, n_splits, partition):
         model = BaseRegressor('test', nr_of_features, [hidden_size])
         model.train_(X_train_tensor, y_train_tensor)
 
-        # Instantiate the loss function
+        # Evaluate the model
+        model.eval()
         y_pred_tensor = model(X_val_tensor)
         range = torch.max(y_val_tensor) - torch.min(y_val_tensor)
         loss_function = NRMSELoss(range)
-
-        # Evaluate the model
-        model.eval()
         val_loss = loss_function(y_val_tensor, y_pred_tensor).item()
         losses.append(val_loss)
 
