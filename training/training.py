@@ -19,6 +19,9 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 from models.NRMSELoss import NRMSELoss
 from models.base_regressor import BaseRegressor
 
+from pathlib import Path
+
+
 
 #######################
 # BUILDING THE HEADER #
@@ -179,13 +182,15 @@ def extract_features(df):
 ################################
 # PRINCIPAL COMPONENT ANALYSIS #
 ################################
-def perform_pca(X_train, X_test):
+def perform_pca(X_train, X_test, save_dir):
     # Fit PCA model to the training data for capturing 99% of the variance
     pca = PCA(n_components=0.99, svd_solver='full')
     pca.fit(X_train)
 
     # Save the PCA model to a file
-    joblib.dump(pca, '../results/pca.pkl')
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+    with open(Path(save_dir, 'PCA.pkl'), 'wb') as output_file:
+        joblib.dump(pca, output_file)
 
     # Project the data from the old features to their principal components
     print('Number of features before PCA', X_train.shape[1])
