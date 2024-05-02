@@ -10,7 +10,7 @@ from models.NRMSELoss import NRMSELoss
 
 
 class BaseRegressor(nn.Module):
-    def __init__(self, component, input_size, hidden_sizes):
+    def __init__(self, input_size, hidden_sizes):
         super().__init__()
 
         OUTPUT_SIZE = 1
@@ -25,10 +25,7 @@ class BaseRegressor(nn.Module):
         layers.append(nn.Linear(prev_size, OUTPUT_SIZE))
         self.linear_sigmoid_stack = nn.Sequential(*layers)
 
-        self.component = component
-        self.timestamp = time.strftime("%Y%m%d/%H%M%S", time.localtime())
-
-        self.writer = SummaryWriter(Path(f'../results/{self.component}/{self.timestamp}'))
+        self.writer = SummaryWriter(log_dir='results/logs')
 
 
     def forward(self, x):
@@ -68,6 +65,9 @@ class BaseRegressor(nn.Module):
                     self.writer.add_scalar(name + '/grad_norm', param.grad.data.norm(), epoch)
 
 
-    def save(self):
-        with open(Path(f'../results/{self.component}/{self.timestamp}/{self.component}.pt'), 'wb') as output_file:
+    # Retrieved from SoftDecisionTree by Youri Coppens
+    # https://github.com/endymion64/SoftDecisionTree/blob/master/sdt/model.py#L153
+    def save(self, folder_path, save_name):
+        Path(folder_path).mkdir(parents=True, exist_ok=True)
+        with open(Path(folder_path, save_name + '.pt'), 'wb') as output_file:
             torch.save(self.state_dict(), output_file)
