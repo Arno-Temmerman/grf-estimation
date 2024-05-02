@@ -162,7 +162,7 @@ def filter(df):
 ############################
 def extract_features(df):
     # Drop labels
-    X = df.drop(columns=['Fx','Fy','Fz', 'M'], axis=1)
+    X = df.drop(columns=['Fx','Fy','Fz', 'M', 'Fx_o', 'Fy_o', 'Fz_o', 'M_o'], axis=1)
 
     # Drop pressure columns
     P_cols = [col for col in X if col.startswith('P')]
