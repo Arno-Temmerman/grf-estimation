@@ -131,11 +131,9 @@ def homogenize(df):
     # Create the new DataFrame
     df_l = rename_columns(df, 'l', 'r')
     df_r = rename_columns(df, 'r', 'l')
-    df_combined = pd.concat([df_l, df_r])
+    df_r = df_r[df_l.columns]
 
-    # Drop the target labels for other_foot
-    df_combined = df_combined.drop(columns=['Fx_o','Fy_o','Fz_o', 'M_o'])
-    return df_combined
+    return df_l, df_r
 
 
 #############
