@@ -99,8 +99,8 @@ def read_gait_cycles(subjects, scenes, trials):
         return remove_buffers(gait_cycle)
 
 
-    # Build up DataFrame of gait cyles by traversing the specified TRIALS
-    df = DataFrame()
+    # Build up list of DataFrames of gait cyles by traversing the specified TRIALS
+    dfs = []
 
     for subdirs in itertools.product(subjects, scenes):
         path = DATA_DIR + '/'.join(subdirs)
@@ -110,27 +110,40 @@ def read_gait_cycles(subjects, scenes, trials):
                 print("Reading", file)
                 filepath = path + '/' + file
                 gait_cycle = read_gait_cycle(filepath)
+                gait_cycle['subject'] = subdirs[0]
                 gait_cycle['trial'] = file
-                df = pd.concat([df, gait_cycle])
+                dfs.append(gait_cycle)
 
-    return df
+    return dfs
 
 
 ##############################################
 # LEFT VS. RIGHT FOOT -> MAIN VS. OTHER FOOT #
 ##############################################
 # Removes the distinction between left and right foot by creating a new DataFrame in terms of main_foot and other_foot
-def homogenize(df):
-    def rename_columns(df, main_foot, other_foot):
-        mapping = {col: col.replace("_" + main_foot, "")
-                           .replace("_" + other_foot, "_o")
-                   for col in df.columns}
+def homogenize(gait_cycles):
+    def trim_and_rename(gait_cycles, main_foot, other_foot):
+        def rename_columns(df, main_foot, other_foot):
+            mapping = {col: col.replace("_" + main_foot, "")
+                               .replace("_" + other_foot, "_o")
+                       for col in df.columns}
+            return df.rename(columns=mapping)
 
-        return df.rename(columns=mapping)
+        df = DataFrame()
+
+        for gait_cycle in gait_cycles:
+            active = gait_cycle[gait_cycle[f'Fz_{main_foot}'] > 0]
+            first = max(gait_cycle.index[0], active.index.min() - 5)
+            last  = min(gait_cycle.index[-1], active.index.max() + 5)
+            trimmed = gait_cycle[(first <= gait_cycle.index) & (gait_cycle.index <= last)]
+
+            df = pd.concat([df, trimmed])
+
+        return rename_columns(df, main_foot, other_foot)
 
     # Create the new DataFrame
-    df_l = rename_columns(df, 'l', 'r')
-    df_r = rename_columns(df, 'r', 'l')
+    df_l = trim_and_rename(gait_cycles, 'l', 'r')
+    df_r = trim_and_rename(gait_cycles, 'r', 'l')
     df_r = df_r[df_l.columns]
 
     return df_l, df_r
@@ -178,6 +191,9 @@ def extract_features(df):
 
     # Drop source file
     X = X.drop(columns=['trial'], axis=1)
+
+    # Drop subject
+    X = X.drop(columns=['subject'], axis=1)
 
     return X
 
@@ -236,7 +252,7 @@ def print_metrics(y_test, y_pred):
 ####################
 # CROSS-VALIDATION #
 ####################
-def cross_validate(hidden_size, X, y, n_splits, partition):
+def cross_validate(hidden_sizes, X, y, n_splits, partition, save_dir):
     kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
     losses = []
@@ -251,7 +267,33 @@ def cross_validate(hidden_size, X, y, n_splits, partition):
         y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
         # Perform PCA
-        X_train, X_val = perform_pca(X_train, X_val)
+        X_train, X_val = perform_pca(X_train, X_val, save_dir)
+        nr_of_features = np.shape(X_train)[1]
+
+        # Convert to tensors
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+        X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train.to_numpy().reshape((-1, 1)), dtype=torch.float32)
+        y_val_tensor = torch.tensor(y_val.to_numpy().reshape((-1, 1)), dtype=torch.float32)
+
+        # Train the model
+        model = BaseRegressor(nr_of_features, hidden_sizes)
+        model.train_(X_train_tensor, y_train_tensor)
+
+        # Evaluate the model
+        model.eval()
+        y_pred_tensor = model(X_val_tensor)
+        loss_function = nn.MSELoss()
+        val_loss = loss_function(y_val_tensor, y_pred_tensor).item()
+        losses.append(val_loss)
+
+        # Correlation
+        y_val = y_val_tensor.detach().squeeze().numpy()
+        y_pred = y_pred_tensor.detach().squeeze().numpy()
+        r = np.corrcoef(y_val, y_pred)[0, 1]
+        correlations.append(r)
+
+    return losses, correlations
         nr_of_features = np.shape(X_train)[1]
 
         # Convert to tensors
