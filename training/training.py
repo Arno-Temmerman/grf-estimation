@@ -28,8 +28,8 @@ from pathlib import Path
 #######################
 LABELS = [
     # Kistler force plates
-    'Fx_l','Fy_l','Fz_l', 'M_l',
-    'Fx_r','Fy_r','Fz_r', 'M_r'
+    'Fx_l', 'Fy_l', 'Fz_l', 'M_l',
+    'Fx_r', 'Fy_r', 'Fz_r', 'M_r'
 ]
 INPUTS = [
     # Moticon insoles
@@ -51,7 +51,7 @@ INPUTS = [
     'tfl_r', 'tfl_l' # tensor fasciae latae
 ]
 MASKS = [
-    'fp1', 'fp2', 'fp3', 'fp4',
+    'fp1_l', 'fp1_r', 'fp2_l', 'fp2_r', 'fp3_l', 'fp3_r', 'fp4_l', 'fp4_r',
     'valid_mask_feet', # 0 = occluded markers
     'correct_mask_fp', # 0 = force plate gave bad prediction
     'correct_mask_ins' # 0 = foot incorrectly placed on force plate
@@ -168,8 +168,13 @@ def extract_features(df):
     P_cols = [col for col in X if col.startswith('P')]
     X = X.drop(columns=P_cols, axis=1)
 
-    # Drop masks
-    X = X.drop(columns=MASKS, axis=1)
+    # Drop pressure columns
+    fp_cols = [col for col in X if col.startswith('fp')]
+    X = X.drop(columns=fp_cols, axis=1)
+
+    # Drop other masks
+    OTHER = ['valid_mask_feet', 'correct_mask_fp', 'correct_mask_ins']
+    X = X.drop(columns=OTHER, axis=1)
 
     # Drop source file
     X = X.drop(columns=['trial'], axis=1)
