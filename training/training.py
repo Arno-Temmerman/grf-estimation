@@ -303,7 +303,7 @@ def cross_validate(hidden_sizes, X, y, n_splits, partition, save_dir):
         y_val_tensor = torch.tensor(y_val.to_numpy().reshape((-1, 1)), dtype=torch.float32)
 
         # Train the model
-        model = BaseRegressor('test', nr_of_features, [hidden_size])
+        model = BaseRegressor(nr_of_features, hidden_sizes)
         model.train_(X_train_tensor, y_train_tensor)
 
         # Evaluate the model
