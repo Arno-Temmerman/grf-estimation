@@ -10,7 +10,7 @@ class CombinedRegressor(nn.Module):
     def __init__(self):
         super(CombinedRegressor, self).__init__()
 
-        DIR = '20240502-130318'
+        DIR = '20240502-170624'
 
         def load_model(component):
             sizes = []
@@ -27,7 +27,7 @@ class CombinedRegressor(nn.Module):
 
 
         # PCA
-        self.pca = joblib.load(f'../results/{DIR}/pca.pkl')
+        self.pca = joblib.load(f'../results/{DIR}/PCA.pkl')
 
         # Load the base regressors
         self.Fx_base = load_model('Fx_base')
