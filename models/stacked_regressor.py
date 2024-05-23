@@ -6,11 +6,11 @@ import numpy as np
 from models.base_regressor import BaseRegressor
 
 
-class CombinedRegressor(nn.Module):
+class StackedRegressor(nn.Module):
     def __init__(self):
-        super(CombinedRegressor, self).__init__()
+        super(StackedRegressor, self).__init__()
 
-        DIR = '20240502-170624'
+        DIR = '20240523-155537'
 
         def load_model(component):
             sizes = []
