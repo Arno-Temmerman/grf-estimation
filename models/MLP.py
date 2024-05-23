@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import Linear, Sigmoid, MSELoss
@@ -93,6 +94,42 @@ class MLP(nn.Module):
     # Retrieved from SoftDecisionTree by Youri Coppens
     # https://github.com/endymion64/SoftDecisionTree/blob/master/sdt/model.py#L153
     def save(self, folder_path, save_name):
+        '''Saves current state of MLP to .pt file
+
+        Args:
+            folder_path (str): path to destination folder
+            save_name (str): name of the .pt file
+        '''
         Path(folder_path).mkdir(parents=True, exist_ok=True)
         with open(Path(folder_path, save_name + '.pt'), 'wb') as output_file:
             torch.save(self.state_dict(), output_file)
+
+    @classmethod
+    def load(cls, folder_path, save_name):
+        '''Loads state from previously saved .pt file
+
+        Args:
+            folder_path (str): path to folder
+            save_name (str): name of the .pt file
+
+        Returns:
+            MLP: MLP with restored state
+        '''
+        state_dict = torch.load(f'{folder_path}/{save_name}.pt')
+
+        # Derive size of all layers
+        hidden_sizes = []
+        for key, value in state_dict.items():
+            if 'weight' in key:
+                if 'input' in key:  input_size = np.shape(value)[1]
+                if 'hidden' in key: hidden_sizes.append(np.shape(value)[1])
+                if 'output' in key:
+                    hidden_sizes.append(np.shape(value)[1])
+                    output_size = np.shape(value)[0]
+
+        # Reconstruct MLP object
+        mlp = cls(hidden_sizes)
+        mlp.__input_stack = Linear(input_size, mlp.hidden_sizes[0])
+        mlp.__output_stack = Linear(mlp.hidden_sizes[-1], output_size)
+        return mlp
+
