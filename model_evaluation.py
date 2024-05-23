@@ -30,7 +30,7 @@ def print_metrics(y_test, y_pred):
     plt.figure(figsize=(3, 3))
     plt.xlabel('y_test')
     plt.ylabel('y_pred')
-    plt.scatter(y_test, y_pred)
+    plt.scatter(y_test, y_pred, s=5)
     plt.show()
 
 
@@ -41,7 +41,7 @@ def cross_validate(model, X, Y, strata, cv, pca=False):
     scores = []
 
     fold = 0
-    for train_idx, val_idx in cv.split(X, strata):
+    for train_idx, val_idx in cv.split(X, groups=strata):
         fold += 1
 
         # Make train-test split
@@ -60,3 +60,32 @@ def cross_validate(model, X, Y, strata, cv, pca=False):
         scores.append(mse)
 
     return scores
+
+
+###############
+# CORRELATION #
+###############
+def plot_correlations(Y_test, Y_pred):
+    fig, axs = plt.subplots(2, 4, figsize=(12, 9), sharey='col')
+
+    LABELS = ['Fx_l', 'Fy_l', 'Fz_l', 'Tz_l',
+              'Fx_r', 'Fy_r', 'Fz_r', 'Tz_r']
+    COLORS = ['red', 'green', 'blue', 'blue']
+
+    for i, label in enumerate(LABELS):
+        y_test = Y_test[:, i].detach().numpy()
+        y_pred = Y_pred[:, i].detach().numpy()
+
+        # Correlation
+        r = np.corrcoef(y_test, y_pred)[0, 1]
+
+        # Scatterplot
+        scatterplot = axs[i // 4, i % 4]
+        scatterplot.set_title(f'{label} {r}')
+        scatterplot.set_xlabel(f'{label}_test')
+        scatterplot.set_ylabel(f'{label}_pred')
+        scatterplot.set_xlim(np.min(y_test), np.max(y_test))
+        scatterplot.set_ylim(np.min(y_pred), np.max(y_pred))
+        scatterplot.scatter(y_test, y_pred, s=5, color=COLORS[i % 4])
+
+    plt.show()

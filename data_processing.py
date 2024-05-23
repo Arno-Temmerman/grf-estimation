@@ -1,27 +1,13 @@
 import itertools
-
-import pandas as pd
-from pandas import DataFrame
-
-import numpy as np
-import torch
-import torch.nn as nn
-
-import matplotlib.pyplot as plt
-
-import os
-
 import joblib
-
-from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split, StratifiedKFold
-from sklearn.preprocessing import StandardScaler
-
-from models.NRMSELoss import NRMSELoss
-from models.base_regressor import BaseRegressor
-
+import os
+import pandas as pd
+import torch
+from pandas import DataFrame
 from pathlib import Path
-
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from torch import tensor
 
 
 #######################
@@ -106,12 +92,13 @@ def read_gait_cycles(subjects, scenes, trials, drop_emgs=False):
     # Build up list of DataFrames of gait cyles by traversing the specified TRIALS
     dfs = []
 
+    print(f'Reading {trials} trials of {subjects}.')
+
     for subdirs in itertools.product(subjects, scenes):
         path = DATA_DIR + '/'.join(subdirs)
 
         for file in os.listdir(path):
             if file.endswith('.csv') and (file.startswith(trials) or trials == ('all')):
-                print("Reading", file)
                 filepath = path + '/' + file
                 gait_cycle = read_gait_cycle(filepath)
                 gait_cycle['subject'] = subdirs[0]
@@ -180,8 +167,12 @@ def filter(df):
 ############################
 def extract_features(df):
     # Drop labels
-    X = df.drop(columns=['Fx',   'Fy',   'Fz',   'Tz',
-                         'Fx_o', 'Fy_o', 'Fz_o', 'Tz_o'])
+    labels = [col for col in df
+              if col.startswith('Fx')
+              or col.startswith('Fy')
+              or col.startswith('Fz')
+              or col.startswith('Tz')]
+    X = df.drop(columns=labels)
 
     # Drop pressure columns
     P_cols = [col for col in X if col.startswith('P')]
@@ -211,12 +202,24 @@ def perform_pca(X_train, X_test, save_dir=None):
     # Normalize features so their variances are comparable
     scaler = StandardScaler()
     scaler.fit(X_train)
+
     X_train = scaler.transform(X_train)
     X_test  = scaler.transform(X_test)
+
+    # Save the scaler to a file
+    if save_dir:
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        with open(Path(save_dir, 'scaler.pkl'), 'wb') as output_file:
+            joblib.dump(scaler, output_file)
+
 
     # Fit PCA model to the training data for capturing 99% of the variance
     pca = PCA(n_components=0.99, svd_solver='full')
     pca.fit(X_train)
+
+    # Project the data from the old features to their principal components
+    X_pc_train = pca.transform(X_train)
+    X_pc_test  = pca.transform(X_test)
 
     # Save the PCA model to a file
     if save_dir:
@@ -224,14 +227,9 @@ def perform_pca(X_train, X_test, save_dir=None):
         with open(Path(save_dir, 'PCA.pkl'), 'wb') as output_file:
             joblib.dump(pca, output_file)
 
-    # Project the data from the old features to their principal components
-    X_pc_train = pca.transform(X_train)
-    X_pc_test  = pca.transform(X_test)
-    print('Number of features before PCA', X_train.shape[1])
-    print('Number of features after PCA', X_pc_train.shape[1])
 
     # Convert the result to tensor
-    X_train_tensor = torch.tensor(X_pc_train, dtype=torch.float32)
-    X_test_tensor  = torch.tensor(X_pc_test,  dtype=torch.float32)
+    X_train_tensor = tensor(X_pc_train, dtype=torch.float32)
+    X_test_tensor  = tensor(X_pc_test,  dtype=torch.float32)
 
     return X_train_tensor, X_test_tensor
