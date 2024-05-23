@@ -15,6 +15,7 @@ import joblib
 
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
 
 from models.NRMSELoss import NRMSELoss
 from models.base_regressor import BaseRegressor
@@ -28,10 +29,10 @@ from pathlib import Path
 #######################
 LABELS = [
     # Kistler force plates
-    'Fx_l', 'Fy_l', 'Fz_l', 'M_l',
-    'Fx_r', 'Fy_r', 'Fz_r', 'M_r'
+    'Fx_l', 'Fy_l', 'Fz_l', 'Tz_l',
+    'Fx_r', 'Fy_r', 'Fz_r', 'Tz_r'
 ]
-INPUTS = [
+INSOLES = [
     # Moticon insoles
     'Ftot_l', 'CoPx_l', 'CoPy_l',
     'Ftot_r', 'CoPx_r', 'CoPy_r',
@@ -42,8 +43,8 @@ INPUTS = [
 
     'P1_r', 'P2_r', 'P3_r', 'P4_r', 'P5_r', 'P6_r', 'P7_r', 'P8_r', 'P9_r', 'P10_r', 'P11_r', 'P12_r', 'P13_r', 'P14_r', 'P15_r', 'P16_r',
     'ax_r', 'ay_r', 'az_r',
-    'angx_r', 'angy_r', 'angz_r',
-
+    'angx_r', 'angy_r', 'angz_r']
+EMGS = [
     # Cometa EMG sensors
     'vm_r',  'vm_l',  # vastus medialis
     'vr_r',  'vr_l',  # vastus radialis
@@ -56,8 +57,7 @@ MASKS = [
     'correct_mask_fp', # 0 = force plate gave bad prediction
     'correct_mask_ins' # 0 = foot incorrectly placed on force plate
 ]
-HEADER = LABELS + INPUTS + MASKS
-
+HEADER = LABELS + INSOLES + EMGS + MASKS
 
 ####################
 # LOADING THE DATA #
@@ -65,7 +65,7 @@ HEADER = LABELS + INPUTS + MASKS
 DATA_DIR = "../segmented_data/"
 
 # Reads the csv-files in ./segmented_data of the subjects-scenes-trials combinations specified above
-def read_gait_cycles(subjects, scenes, trials):
+def read_gait_cycles(subjects, scenes, trials, drop_emgs=False):
     # Adds the features of several past and future timesteps to each row
     def expand_timeframe(gait_cycle):
         NR_OF_TIMESTEPS = 6
@@ -95,9 +95,13 @@ def read_gait_cycles(subjects, scenes, trials):
     # Reads a single csv-file, expands the features and removes the buffers
     def read_gait_cycle(filepath):
         gait_cycle = pd.read_csv(filepath, header=0, names=HEADER)
+        if drop_emgs:
+            gait_cycle = gait_cycle.drop(columns=EMGS)
         gait_cycle = expand_timeframe(gait_cycle)
         return remove_buffers(gait_cycle)
 
+    if drop_emgs: INPUTS = INSOLES
+    else:         INPUTS = INSOLES + EMGS
 
     # Build up list of DataFrames of gait cyles by traversing the specified TRIALS
     dfs = []
@@ -164,6 +168,7 @@ def filter(df):
     # Removes rows for which no target label is available
     df = df[(df['Ftot'] < 0.05) | (df['Fz'] != 0)]
 
+
     # Remove rows with non-available values
     df = df.dropna()
 
@@ -175,25 +180,26 @@ def filter(df):
 ############################
 def extract_features(df):
     # Drop labels
-    X = df.drop(columns=['Fx','Fy','Fz', 'M', 'Fx_o', 'Fy_o', 'Fz_o', 'M_o'], axis=1)
+    X = df.drop(columns=['Fx',   'Fy',   'Fz',   'Tz',
+                         'Fx_o', 'Fy_o', 'Fz_o', 'Tz_o'])
 
     # Drop pressure columns
     P_cols = [col for col in X if col.startswith('P')]
-    X = X.drop(columns=P_cols, axis=1)
+    X = X.drop(columns=P_cols)
 
     # Drop pressure columns
     fp_cols = [col for col in X if col.startswith('fp')]
-    X = X.drop(columns=fp_cols, axis=1)
+    X = X.drop(columns=fp_cols)
 
     # Drop other masks
     OTHER = ['valid_mask_feet', 'correct_mask_fp', 'correct_mask_ins']
-    X = X.drop(columns=OTHER, axis=1)
+    X = X.drop(columns=OTHER)
 
     # Drop source file
-    X = X.drop(columns=['trial'], axis=1)
+    X = X.drop(columns=['trial'])
 
     # Drop subject
-    X = X.drop(columns=['subject'], axis=1)
+    X = X.drop(columns=['subject'])
 
     return X
 
@@ -201,123 +207,31 @@ def extract_features(df):
 ################################
 # PRINCIPAL COMPONENT ANALYSIS #
 ################################
-def perform_pca(X_train, X_test, save_dir):
+def perform_pca(X_train, X_test, save_dir=None):
+    # Normalize features so their variances are comparable
+    scaler = StandardScaler()
+    scaler.fit(X_train)
+    X_train = scaler.transform(X_train)
+    X_test  = scaler.transform(X_test)
+
     # Fit PCA model to the training data for capturing 99% of the variance
     pca = PCA(n_components=0.99, svd_solver='full')
     pca.fit(X_train)
 
     # Save the PCA model to a file
-    Path(save_dir).mkdir(parents=True, exist_ok=True)
-    with open(Path(save_dir, 'PCA.pkl'), 'wb') as output_file:
-        joblib.dump(pca, output_file)
+    if save_dir:
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        with open(Path(save_dir, 'PCA.pkl'), 'wb') as output_file:
+            joblib.dump(pca, output_file)
 
     # Project the data from the old features to their principal components
+    X_pc_train = pca.transform(X_train)
+    X_pc_test  = pca.transform(X_test)
     print('Number of features before PCA', X_train.shape[1])
+    print('Number of features after PCA', X_pc_train.shape[1])
 
-    X_train = pca.transform(X_train)
-    X_test = pca.transform(X_test)
+    # Convert the result to tensor
+    X_train_tensor = torch.tensor(X_pc_train, dtype=torch.float32)
+    X_test_tensor  = torch.tensor(X_pc_test,  dtype=torch.float32)
 
-    print('Number of features after PCA', X_train.shape[1])
-
-    return X_train, X_test
-
-
-########################
-# EVALUATING THE MODEL #
-########################
-def print_metrics(y_test, y_pred):
-    print('Performance on the test set:')
-
-    # NRMSE
-    range = torch.max(y_test) - torch.min(y_test)
-    loss = NRMSELoss(range)
-    test_loss = loss(y_test, y_pred)
-    print(f'NRMSE = {test_loss.item():.4f}')
-
-    y_test = y_test.detach().squeeze().numpy()
-    y_pred = y_pred.detach().squeeze().numpy()
-
-    # Correlation
-    r = np.corrcoef(y_test, y_pred)
-    print('r =', r[0, 1])
-
-    # Scatterplot
-    plt.figure(figsize=(3, 3))
-    plt.xlabel('y_test')
-    plt.ylabel('y_pred')
-    plt.scatter(y_test, y_pred)
-    plt.show()
-
-
-####################
-# CROSS-VALIDATION #
-####################
-def cross_validate(hidden_sizes, X, y, n_splits, partition, save_dir):
-    kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
-
-    losses = []
-    correlations = []
-    fold = 0
-    for train_idx, val_idx in kf.split(X, partition):
-        fold += 1
-        print(f"Fold #{fold}")
-
-        # Make train-test split
-        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-
-        # Perform PCA
-        X_train, X_val = perform_pca(X_train, X_val, save_dir)
-        nr_of_features = np.shape(X_train)[1]
-
-        # Convert to tensors
-        X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
-        X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train.to_numpy().reshape((-1, 1)), dtype=torch.float32)
-        y_val_tensor = torch.tensor(y_val.to_numpy().reshape((-1, 1)), dtype=torch.float32)
-
-        # Train the model
-        model = BaseRegressor(nr_of_features, hidden_sizes)
-        model.train_(X_train_tensor, y_train_tensor)
-
-        # Evaluate the model
-        model.eval()
-        y_pred_tensor = model(X_val_tensor)
-        loss_function = nn.MSELoss()
-        val_loss = loss_function(y_val_tensor, y_pred_tensor).item()
-        losses.append(val_loss)
-
-        # Correlation
-        y_val = y_val_tensor.detach().squeeze().numpy()
-        y_pred = y_pred_tensor.detach().squeeze().numpy()
-        r = np.corrcoef(y_val, y_pred)[0, 1]
-        correlations.append(r)
-
-    return losses, correlations
-        nr_of_features = np.shape(X_train)[1]
-
-        # Convert to tensors
-        X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
-        X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train.to_numpy().reshape((-1, 1)), dtype=torch.float32)
-        y_val_tensor = torch.tensor(y_val.to_numpy().reshape((-1, 1)), dtype=torch.float32)
-
-        # Train the model
-        model = BaseRegressor(nr_of_features, hidden_sizes)
-        model.train_(X_train_tensor, y_train_tensor)
-
-        # Evaluate the model
-        model.eval()
-        y_pred_tensor = model(X_val_tensor)
-        range = torch.max(y_val_tensor) - torch.min(y_val_tensor)
-        loss_function = NRMSELoss(range)
-        val_loss = loss_function(y_val_tensor, y_pred_tensor).item()
-        losses.append(val_loss)
-
-        # Correlation
-        y_val = y_val_tensor.detach().squeeze().numpy()
-        y_pred = y_pred_tensor.detach().squeeze().numpy()
-        r = np.corrcoef(y_val, y_pred)[0, 1]
-        correlations.append(r)
-
-    return losses, correlations
+    return X_train_tensor, X_test_tensor
