@@ -131,5 +131,6 @@ class MLP(nn.Module):
         mlp = cls(hidden_sizes)
         mlp.__input_stack = Linear(input_size, mlp.hidden_sizes[0])
         mlp.__output_stack = Linear(mlp.hidden_sizes[-1], output_size)
+        mlp.load_state_dict(state_dict)
         return mlp
 
