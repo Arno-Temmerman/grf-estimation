@@ -2,9 +2,8 @@ import numpy as np
 import torch
 import data_processing as dp
 from matplotlib import pyplot as plt
-from sklearn.model_selection import StratifiedKFold
 
-from models.NRMSELoss import NRMSELoss
+from loss_functions.nrmse_loss import NRMSELoss
 
 
 ########################

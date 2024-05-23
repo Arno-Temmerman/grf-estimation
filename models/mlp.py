@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.nn import Linear, Sigmoid, MSELoss
 
-from models.NRMSELoss import NRMSELoss
+from loss_functions.nrmse_loss import NRMSELoss
 
 
 class MLP(nn.Module):

@@ -5,7 +5,7 @@ import optuna
 import pandas as pd
 import time
 import torch
-from models.MLP import MLP
+from models.mlp import MLP
 from sklearn.model_selection import train_test_split, StratifiedKFold, GroupKFold, GroupShuffleSplit
 
 from models.stm_regressor import STMRegressor
