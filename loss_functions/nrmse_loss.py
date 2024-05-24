@@ -16,6 +16,3 @@ class NRMSELoss(nn.Module):
         return loss
 
 
-    def forward(self, y, y_pred):
-        rmse = torch.sqrt(self.mse(y, y_pred))
-        return rmse / self.norm_factor
