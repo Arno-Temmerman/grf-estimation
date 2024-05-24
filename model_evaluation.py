@@ -14,7 +14,7 @@ def print_metrics(y_test, y_pred):
 
     # NRMSE
     range = torch.quantile(y_test, 0.99) - torch.quantile(y_test, 0.01)
-    loss = NRMSELoss(range)
+    loss = NRMSELoss([range])
     test_loss = loss(y_test, y_pred)
     print(f'NRMSE = {test_loss.item():.4f}')
 

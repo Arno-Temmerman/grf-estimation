@@ -58,8 +58,11 @@ class MLP(nn.Module):
         optimizer = torch.optim.Adam(params=self.parameters(), lr=0.01)
 
         # Instantiate the loss function
-        norm_factor = (torch.max(Y).item() - torch.min(Y).item())
-        loss_function = NRMSELoss(norm_factor)
+        norm_factors = []
+        for i in range(Y.shape[1]):
+            norm_factor = torch.max(Y[:, i]).item() - torch.min(Y[:, i]).item()
+            norm_factors.append(norm_factor)
+        loss_function = NRMSELoss(norm_factors)
 
         # Training loop
         for epoch in range(100):
