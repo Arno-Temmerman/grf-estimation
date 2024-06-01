@@ -1,4 +1,5 @@
 import data_processing as dp
+import joblib
 import model_evaluation as me
 import numpy as np
 import optuna
@@ -6,129 +7,144 @@ import pandas as pd
 import time
 import torch
 from models.mlp import MLP
-from sklearn.model_selection import train_test_split, StratifiedKFold, GroupKFold, GroupShuffleSplit
-
-from models.stm_regressor import STMRegressor
-
-META1 = ['incl_emg', 'excl_emg']
-
-for FEATURES in META1:
-    ####################
-    # LOADING THE DATA #
-    ####################
-    SUBJECTS = ['AT', 'EL', 'HH', 'MS', 'RB', 'RL', 'TT']
-    SCENES = ['FlatWalkStraight', 'FlatWalkCircular', 'FlatWalkStatic']
-    #TRIALS = ('FW walking')
-    TRIALS = ('all')
-
-    # FEATURES = 'incl_emg'
-    # FEATURES = 'excl_emg'
-
-    DIR = f'results/{FEATURES}/{TRIALS}/' + time.strftime("%Y%m%d-%H%M%S/", time.localtime())
+from pathlib import Path
+from sklearn.decomposition import PCA
+from sklearn.model_selection import GroupKFold, LeaveOneGroupOut
+from sklearn.preprocessing import StandardScaler
+from torch import tensor
 
 
-    gait_cycles = dp.read_gait_cycles(SUBJECTS, SCENES, TRIALS, drop_emgs=(FEATURES == 'excl_emg'))
+EXCL_EMG = False
+
+if EXCL_EMG: FEATURES = 'excl_emg'
+else:        FEATURES = 'incl_emg'
+
+####################
+# LOADING THE DATA #
+####################
+DATA_DIR = "../segmented_data/"
+SUBJECTS = ['AT', 'EL', 'MS', 'RB', 'RL', 'TT']
+SCENES = ['FlatWalkStraight', 'FlatWalkCircular', 'FlatWalkStatic']
+TRIALS = ('all')
+
+gait_cycles = dp.read_gait_cycles(DATA_DIR, SUBJECTS, SCENES, TRIALS, drop_emgs=(FEATURES == 'excl_emg'))
+
+DIR = f'results/{FEATURES}/{TRIALS}/' + time.strftime("%Y%m%d-%H%M%S/", time.localtime())
 
 
-    ##############################################
-    # LEFT VS. RIGHT FOOT -> MAIN VS. OTHER FOOT #
-    ##############################################
-    df_l, df_r = dp.homogenize(gait_cycles)
-    df_homogenous = pd.concat([df_l, df_r])
+############################
+# TRIMMING THE GAIT CYCLES #
+############################
+df_l, df_r = dp.filter_seperately(gait_cycles)
+
+del gait_cycles
 
 
-    #############
-    # FILTERING #
-    #############
-    df_filtered = dp.filter(df_homogenous)
+##############################################
+# LEFT VS. RIGHT FOOT -> MAIN VS. OTHER FOOT #
+##############################################
+df_l, df_r = dp.homogenize(df_l, df_r)
+df_homogenous = pd.concat([df_l, df_r])
+
+del df_l, df_r
+
+############################
+# FEATURE/LABEL EXTRACTION #
+############################
+# Features
+X = dp.extract_features(df_homogenous)
+
+# Labels
+LABELS = ['Fx', 'Fy', 'Fz', 'Tz']
+Y = df_homogenous[LABELS]
+
+# Subjects
+subjects = df_homogenous['subject']
+
+del df_homogenous
 
 
-    ############################
-    # FEATURE/LABEL EXTRACTION #
-    ############################
-    # Features
-    X = dp.extract_features(df_filtered)
+######################
+# CONVERT TO TENSORS #
+######################
+X_tensor = torch.tensor(X.values, dtype=torch.float32)
+Y_tensor = torch.tensor(Y.to_numpy().reshape((-1, 4)), dtype=torch.float32)
 
-    # Labels
-    LABELS = ['Fx', 'Fy', 'Fz', 'Tz']
-    Y = df_filtered[LABELS]
-
-    # Groups
-    subjects = df_filtered['subject']
+del X, Y
 
 
-    ######################
-    # CONVERT TO TENSORS #
-    ######################
-    X_tensor = torch.tensor(X.values, dtype=torch.float32)
-    Y_tensor = torch.tensor(Y.to_numpy().reshape((-1, 4)), dtype=torch.float32)
+##########################
+# CROSS-VALIDATION SPLIT #
+##########################
+K = len(subjects.unique())
+kf = LeaveOneGroupOut()
 
 
-    ####################
-    # TRAIN-TEST SPLIT #
-    ####################
-    train_idx = np.where(subjects != 'HH')[0]
-    test_idx  = np.where(subjects == 'HH')[0]
+#########################
+# HYPERPARAMETER TUNING #
+#########################
+for i, label in enumerate(LABELS):
+    # 1. Define an objective function to be maximized
+    def objective(trial):
+        # 2. Suggest values for the hyperparameters using a trial object
+        ## a. Number of layers
+        n_layers = trial.suggest_int('hidden_layers', 1, 2)
 
-    X_full_train, X_test = X_tensor[train_idx], X_tensor[test_idx]
-    Y_full_train, Y_test = Y_tensor[train_idx], Y_tensor[test_idx]
-    subjects_full_train, subjects_test = subjects[subjects != 'HH'], subjects[subjects == 'HH']
+        ## b. Number of neurons per layer
+        hidden_sizes = []
+        for i in range(n_layers):
+            size = trial.suggest_int(f'hidden_size_{i}', 16, 64)
+            hidden_sizes.append(size)
+
+        # 3. Instantiate a model with suggested hyperparameters
+        model = MLP(hidden_sizes)
+        trial.set_user_attr('model', model)
+
+        # 4. Cross-validate the suggested model
+        mses, corrs = me.cross_validate(model, X_tensor, Y_tensor[:, i].reshape(-1, 1), subjects, kf)
+        print('Out-of-sample errors:', mses)
+        print('Correlations:', corrs)
+        return np.mean(mses)
 
 
-    K = len(subjects_full_train.unique())
-    kf = GroupKFold(n_splits=K)
+    # 5. Create a study object and optimize the objective function.
+    study = optuna.create_study(study_name=label, direction='minimize')
+    study.set_user_attr('best_score', float('inf'))
+    study.optimize(objective, n_trials=1)
 
 
-    ###############
+    ##########################
+    # PERSIST THE BEST MODEL #
+    ##########################
+    best_model = study.best_trial.user_attrs['model']
+
     # PERFORM PCA #
-    ###############
-    X_pc_full_train, X_pc_test = dp.perform_pca(X_full_train, X_test, DIR)
+    # Normalize features so their variances are comparable
+    scaler = StandardScaler()
+    scaler.fit(X_tensor)
+    X_full_train_scaled = scaler.transform(X_tensor)
 
+    # Save the scaler to a file
+    Path(DIR).mkdir(parents=True, exist_ok=True)
+    with open(Path(DIR, 'scaler.pkl'), 'wb') as output_file:
+        joblib.dump(scaler, output_file)
 
-    #########################
-    # HYPERPARAMETER TUNING #
-    #########################
-    best_models = {}
+    # Fit PCA model to the training data for capturing 99% of the variance
+    pca = PCA(n_components=0.99, svd_solver='full')
+    pca.fit(X_full_train_scaled)
 
-    for i, label in enumerate(LABELS):
-        # 1. Define an objective function to be maximized
-        def objective(trial):
-            # 2. Suggest values for the hyperparameters using a trial object
-            ## a. Number of layers
-            n_layers = trial.suggest_int('hidden_layers', 1, 2)
+    # Project the data from the old features to their principal components
+    X_pc_full_train = pca.transform(X_full_train_scaled)
 
-            ## b. Number of neurons per layer
-            hidden_sizes = []
-            for i in range(n_layers):
-                size = trial.suggest_int(f'hidden_size_{i}', 32, 64)
-                hidden_sizes.append(size)
+    # Save the PCA model to a file
+    Path(DIR).mkdir(parents=True, exist_ok=True)
+    with open(Path(DIR, 'PCA.pkl'), 'wb') as output_file:
+        joblib.dump(pca, output_file)
 
-            # 3. Instantiate a model with suggested hyperparameters
-            model = MLP(hidden_sizes)
-            trial.set_user_attr('model', model)
+    # Convert the result to tensor
+    X_pc_full_train = tensor(X_pc_full_train, dtype=torch.float32)
 
-            # 4. Cross-validate the suggested model
-            scores = me.cross_validate(model, X_full_train, Y_full_train[:, i].reshape(-1, 1), subjects_full_train, kf, pca=True)
-            print('In-sample errors:', scores)
-            return np.mean(scores)
+    del scaler, X_full_train_scaled , pca
 
-
-        # 3. Create a study object and optimize the objective function.
-        study = optuna.create_study(study_name=label, direction='minimize')
-        study.set_user_attr('best_score', float('inf'))
-        study.optimize(objective, n_trials=50)
-
-        best_model = study.best_trial.user_attrs['model']
-        best_model.train_(X_pc_full_train, Y_full_train[:, i].reshape(-1, 1))
-        best_model.save(DIR, label)
-        best_models[label] = best_model
-
-
-    #####################
-    # FINAL PREDICTIONS #
-    #####################
-    for i, (key, value) in enumerate(best_models.items()):
-        mlp = value
-        print(Y_test.shape)
-        y_pred = mlp(X_pc_test)
-        me.print_metrics(Y_test[:, i].reshape(-1, 1), y_pred)
+    best_model.train_(X_pc_full_train, Y_tensor[:, i].reshape(-1, 1))
+    best_model.save(DIR, label)
