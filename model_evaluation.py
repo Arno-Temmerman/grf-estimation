@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+from sklearn.model_selection import StratifiedKFold, GroupKFold
+
 import data_processing as dp
 from matplotlib import pyplot as plt
 
@@ -36,29 +38,35 @@ def print_metrics(y_test, y_pred):
 ####################
 # CROSS-VALIDATION #
 ####################
-def cross_validate(model, X, Y, strata, cv, pca=False):
-    scores = []
+def cross_validate(model, X, Y, strata, cv):
+    mses, rs = [], []
+
+    if isinstance(cv, StratifiedKFold):
+        folds = cv.split(X, strata)
+    elif isinstance(cv, GroupKFold):
+        folds = cv.split(X, groups=strata)
 
     fold = 0
-    for train_idx, val_idx in cv.split(X, groups=strata):
+    for train_idx, val_idx in folds:
         fold += 1
 
         # Make train-test split
         X_train, X_val = X[train_idx], X[val_idx]
         Y_train, Y_val = Y[train_idx], Y[val_idx]
 
-        # Perform PCA if necessary
-        if pca:
-            X_train, X_val = dp.perform_pca(X_train, X_val)
+        # Perform PCA
+        X_train, X_val = dp.perform_pca(X_train, X_val)
 
         # Train the model
         model.train_(X_train, Y_train)
 
         # Test the model
-        mse = model.test(X_val, Y_val)
-        scores.append(mse)
+        mse, r = model.test(X_val, Y_val)
 
-    return scores
+        mses.append(np.mean(mse))
+        rs.append(np.mean(r))
+
+    return mses, rs
 
 
 ###############

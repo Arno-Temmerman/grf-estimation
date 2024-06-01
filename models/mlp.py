@@ -75,6 +75,7 @@ class MLP(nn.Module):
 
             optimizer.step()  # adjust weights and biases accordingly
 
+    @torch.no_grad()
     def test(self, X, Y):
         '''Computes the MSE of predictions on the test set
 
@@ -83,16 +84,30 @@ class MLP(nn.Module):
             Y (torch.Tensor): target labels of the test set
 
         Returns:
-            float: MSE between predicted and target labels
+            list: MSE between predictions and targets for each variable
+            list: correlation between predictions and targets for each variable
         '''
         self.eval()  # evaluation mode
 
-        # Compare Y to predictions on X
+        # Compute predictions
         Y_pred = self(X)
-        loss_function = MSELoss()
-        mse = loss_function(Y, Y_pred).item()
+        nr_of_vars = Y.shape[1]
 
-        return mse
+        # Compute MSE
+        loss_function = MSELoss()
+        mses = []
+        for i in range(nr_of_vars):
+            mse = loss_function(Y[:, i].reshape((-1, 1)), Y_pred[:, i].reshape((-1, 1))).item()
+            mses.append(mse)
+
+        # Compute correlations
+        r_matrix = np.corrcoef(Y, Y_pred, rowvar=False)
+        rs = []
+        for i in range(nr_of_vars):
+            r = r_matrix[i, nr_of_vars + i]
+            rs.append(r)
+
+        return mses, rs
 
     # Retrieved from SoftDecisionTree by Youri Coppens
     # https://github.com/endymion64/SoftDecisionTree/blob/master/sdt/model.py#L153
