@@ -196,15 +196,18 @@ def reformat(df, main_foot, other_foot):
     return df.rename(columns=mapping)
 
 # Removes the distinction between left and right foot by creating a new DataFrame in terms of main_foot and other_foot
-def homogenize(df):
-    df_l = reformat(df, 'l', 'r')
-    df_r = reformat(df, 'r', 'l')
-    df_r = df_r[df_l.columns]
-    return df_l, df_r
+def homogenize(df_l, df_r=None):
+    # Single parameter version
+    if df_r == None:
+        df = df_l
+        df_l = reformat(df, 'l', 'r')
+        df_r = reformat(df, 'r', 'l')
+    # Two parameter version
+    else:
+        df_l = reformat(df_l, 'l', 'r')
+        df_r = reformat(df_r, 'r', 'l')
 
-def homogenize(df_l, df_r):
-    df_l = reformat(df_l, 'l', 'r')
-    df_r = reformat(df_r, 'r', 'l')
+    # Use same order of columns for both
     df_r = df_r[df_l.columns]
     return df_l, df_r
 
