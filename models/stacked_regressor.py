@@ -84,7 +84,7 @@ class StackedRegressor(nn.Module):
         ###############
         # Add inital predictions to input
         X_pc_l_tensor = torch.cat((X_pc_l_tensor, Fx_l, Fy_l, Fz_l, M_l, Fx_r, Fy_r, Fz_r, M_r), dim=1)
-        X_pc_r_tensor = torch.cat((X_pc_r_tensor, Fx_l, Fy_l, Fz_l, M_l, Fx_r, Fy_r, Fz_r, M_r), dim=1)
+        X_pc_r_tensor = torch.cat((X_pc_r_tensor, Fx_r, Fy_r, Fz_r, M_r, Fx_l, Fy_l, Fz_l, M_l), dim=1)
 
         # Make final predictions with meta models
         Fx_l = self.Fx_meta(X_pc_l_tensor)
