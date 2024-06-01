@@ -48,10 +48,8 @@ HEADER = LABELS + INSOLES + EMGS + MASKS
 ####################
 # LOADING THE DATA #
 ####################
-DATA_DIR = "../segmented_data/"
-
 # Reads the csv-files in ./segmented_data of the subjects-scenes-trials combinations specified above
-def read_gait_cycles(subjects, scenes, trials, drop_emgs=False):
+def read_gait_cycles(data_dir, subjects, scenes, trials, drop_emgs=False):
     # Adds the features of several past and future timesteps to each row
     def expand_timeframe(gait_cycle):
         NR_OF_TIMESTEPS = 6
@@ -65,8 +63,8 @@ def read_gait_cycles(subjects, scenes, trials, drop_emgs=False):
             shifted = gait_cycle[columns].shift(offset)
 
             # Rename shifted columns and concat to gait_cycle
-            timestep = offset * -2 # ms
-            shifted.columns = [f'{col}_{timestep}ms' for col in columns]
+            timestep = offset * -2 # cs
+            shifted.columns = [f'{col}_{timestep}cs' for col in columns]
             gait_cycle = pd.concat([gait_cycle, shifted], axis=1)
 
         return gait_cycle
@@ -95,7 +93,7 @@ def read_gait_cycles(subjects, scenes, trials, drop_emgs=False):
     print(f'Reading {trials} trials of {subjects}.')
 
     for subdirs in itertools.product(subjects, scenes):
-        path = DATA_DIR + '/'.join(subdirs)
+        path = data_dir + '/'.join(subdirs)
 
         for file in os.listdir(path):
             if file.endswith('.csv') and (file.startswith(trials) or trials == ('all')):
@@ -107,59 +105,108 @@ def read_gait_cycles(subjects, scenes, trials, drop_emgs=False):
 
     return dfs
 
+#############
+# FILTERING #
+#############
+def filter_seperately(gait_cycles):
+    def filter(gait_cycles, foot):
+        df = DataFrame()
+
+        # Trim each gait cycle
+        for gait_cycle in gait_cycles:
+            active = gait_cycle[gait_cycle[f'Fz_{foot}'] > 0]
+
+            if not active.empty:
+                first = max(gait_cycle.index[0],  active.index.min() - 15)
+                last  = min(gait_cycle.index[-1], active.index.max() + 15)
+                trimmed = gait_cycle[(first <= gait_cycle.index) & (gait_cycle.index <= last)]
+
+                # Drop other invalid rows
+                trimmed = trimmed[trimmed[f'fp1_{foot}'] != 1]      # invalid fp
+                trimmed = trimmed[trimmed['valid_mask_feet'] == 1]  # occluded markers
+                trimmed = trimmed[trimmed['correct_mask_ins'] == 1] # invalid foot placement
+
+                # Check if trial has been synchronized poorly
+                invalid_steps = trimmed[(trimmed[f'Fz_{foot}'] == 0) & (trimmed[f'Ftot_{foot}'] >= 0.40)]
+
+                # Only add properly synchronized trials
+                if invalid_steps.empty:
+                    df = pd.concat([df, trimmed])
+                else:
+                    trial = trimmed.iloc[0]['trial']
+                    subject = trimmed.iloc[0]['subject']
+                    print(f'Dropped {trial} of subject {subject}.')
+
+        # Drop samples with missing timestamp(s)
+        df = df.dropna()
+
+        return df
+
+    # Trim each foot seperately
+    df_l = filter(gait_cycles, 'l')
+    df_r = filter(gait_cycles, 'r')
+
+    return df_l, df_r
+
+def filter_together(gait_cycles):
+    df = DataFrame()
+
+    # Trim each gait cycle
+    for gait_cycle in gait_cycles:
+        active_l = gait_cycle[gait_cycle[f'Fz_l'] > 0]
+        active_r = gait_cycle[gait_cycle[f'Fz_r'] > 0]
+
+        if not (active_l.empty or active_r.empty):
+            first = max(active_l.index.min() - 15, active_r.index.min() - 15)
+            last  = min(active_l.index.max() + 15, active_r.index.max() + 15)
+            trimmed = gait_cycle[(first <= gait_cycle.index) & (gait_cycle.index <= last)]
+
+            # Drop other invalid rows
+            trimmed = trimmed[(trimmed['fp1_l'] != 1) & (trimmed['fp1_r'] != 1)]  # invalid fp
+            trimmed = trimmed[trimmed['valid_mask_feet'] == 1]                    # occluded markers
+            trimmed = trimmed[trimmed['correct_mask_ins'] == 1]                   # invalid foot placement
+
+            # Check if trial has been synchronized poorly
+            invalid_steps = trimmed[  ((trimmed[f'Fz_l'] == 0) & (trimmed[f'Ftot_l'] >= 0.40))
+                                    | ((trimmed[f'Fz_r'] == 0) & (trimmed[f'Ftot_r'] >= 0.40))]
+
+            # Only add properly synchronized trials
+            if invalid_steps.empty:
+                df = pd.concat([df, trimmed])
+            else:
+                trial = trimmed.iloc[0]['trial']
+                subject = trimmed.iloc[0]['subject']
+                print(f'Dropped {trial} of subject {subject}.')
+
+            df = pd.concat([df, trimmed])
+
+    # Drop samples with missing timestamp(s)
+    df = df.dropna()
+
+    return df
+
 
 ##############################################
 # LEFT VS. RIGHT FOOT -> MAIN VS. OTHER FOOT #
 ##############################################
+def reformat(df, main_foot, other_foot):
+    mapping = {col: col.replace("_" + main_foot, "")
+                       .replace("_" + other_foot, "_o")
+               for col in df.columns}
+    return df.rename(columns=mapping)
+
 # Removes the distinction between left and right foot by creating a new DataFrame in terms of main_foot and other_foot
-def homogenize(gait_cycles):
-    def trim_and_rename(gait_cycles, main_foot, other_foot):
-        def rename_columns(df, main_foot, other_foot):
-            mapping = {col: col.replace("_" + main_foot, "")
-                               .replace("_" + other_foot, "_o")
-                       for col in df.columns}
-            return df.rename(columns=mapping)
-
-        df = DataFrame()
-
-        for gait_cycle in gait_cycles:
-            active = gait_cycle[gait_cycle[f'Fz_{main_foot}'] > 0]
-            first = max(gait_cycle.index[0], active.index.min() - 5)
-            last  = min(gait_cycle.index[-1], active.index.max() + 5)
-            trimmed = gait_cycle[(first <= gait_cycle.index) & (gait_cycle.index <= last)]
-
-            df = pd.concat([df, trimmed])
-
-        return rename_columns(df, main_foot, other_foot)
-
-    # Create the new DataFrame
-    df_l = trim_and_rename(gait_cycles, 'l', 'r')
-    df_r = trim_and_rename(gait_cycles, 'r', 'l')
+def homogenize(df):
+    df_l = reformat(df, 'l', 'r')
+    df_r = reformat(df, 'r', 'l')
     df_r = df_r[df_l.columns]
-
     return df_l, df_r
 
-
-#############
-# FILTERING #
-#############
-def filter(df):
-    # Ignore readings of force plate 1 (loose)
-    df = df[df['fp1'] != 1]
-
-    # # Only keep masked rows
-    df = df[df['valid_mask_feet'] == 1]
-    # df = df[df['correct_mask_fp'] == 1] #ignore this mask for now
-    df = df[df['correct_mask_ins'] == 1]
-
-    # Removes rows for which no target label is available
-    df = df[(df['Ftot'] < 0.05) | (df['Fz'] != 0)]
-
-
-    # Remove rows with non-available values
-    df = df.dropna()
-
-    return df
+def homogenize(df_l, df_r):
+    df_l = reformat(df_l, 'l', 'r')
+    df_r = reformat(df_r, 'r', 'l')
+    df_r = df_r[df_l.columns]
+    return df_l, df_r
 
 
 ############################
