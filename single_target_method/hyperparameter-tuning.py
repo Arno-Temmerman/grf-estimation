@@ -48,6 +48,7 @@ df_homogenous = pd.concat([df_l, df_r])
 
 del df_l, df_r
 
+
 ############################
 # FEATURE/LABEL EXTRACTION #
 ############################
@@ -83,17 +84,19 @@ kf = LeaveOneGroupOut()
 #########################
 # HYPERPARAMETER TUNING #
 #########################
+best_models = {}
+
 for i, label in enumerate(LABELS):
     # 1. Define an objective function to be maximized
     def objective(trial):
         # 2. Suggest values for the hyperparameters using a trial object
         ## a. Number of layers
-        n_layers = trial.suggest_int('hidden_layers', 1, 2)
+        n_layers = trial.suggest_int('hidden_layers', 2, 2)
 
         ## b. Number of neurons per layer
         hidden_sizes = []
         for i in range(n_layers):
-            size = trial.suggest_int(f'hidden_size_{i}', 16, 64)
+            size = trial.suggest_int(f'hidden_size_{i}', 55, 55)
             hidden_sizes.append(size)
 
         # 3. Instantiate a model with suggested hyperparameters
@@ -112,39 +115,39 @@ for i, label in enumerate(LABELS):
     study.set_user_attr('best_score', float('inf'))
     study.optimize(objective, n_trials=1)
 
+    # Remember the best model
+    best_models[label] = study.best_trial.user_attrs['model']
 
-    ##########################
-    # PERSIST THE BEST MODEL #
-    ##########################
-    best_model = study.best_trial.user_attrs['model']
 
-    # PERFORM PCA #
-    # Normalize features so their variances are comparable
-    scaler = StandardScaler()
-    scaler.fit(X_tensor)
-    X_full_train_scaled = scaler.transform(X_tensor)
+#######################
+# PERSIST BEST MODELS #
+#######################
 
-    # Save the scaler to a file
-    Path(DIR).mkdir(parents=True, exist_ok=True)
-    with open(Path(DIR, 'scaler.pkl'), 'wb') as output_file:
-        joblib.dump(scaler, output_file)
+# PERFORM PCA #
+# Normalize features so their variances are comparable
+scaler = StandardScaler()
+scaler.fit(X_tensor)
+X_scaled = scaler.transform(X_tensor)
 
-    # Fit PCA model to the training data for capturing 99% of the variance
-    pca = PCA(n_components=0.99, svd_solver='full')
-    pca.fit(X_full_train_scaled)
+# Fit PCA model to the training data for capturing 99% of the variance
+pca = PCA(n_components=0.99, svd_solver='full')
+pca.fit(X_scaled)
+X_pc = pca.transform(X_scaled)
+X_pc_tensor = tensor(X_pc, dtype=torch.float32)
 
-    # Project the data from the old features to their principal components
-    X_pc_full_train = pca.transform(X_full_train_scaled)
+# Persist both models
+Path(DIR).mkdir(parents=True, exist_ok=True)
+# Save the scaler to a file
+with open(Path(DIR, 'scaler.pkl'), 'wb') as output_file:
+    joblib.dump(scaler, output_file)
 
-    # Save the PCA model to a file
-    Path(DIR).mkdir(parents=True, exist_ok=True)
-    with open(Path(DIR, 'PCA.pkl'), 'wb') as output_file:
-        joblib.dump(pca, output_file)
+# Save the PCA model to a file
+with open(Path(DIR, 'PCA.pkl'), 'wb') as output_file:
+    joblib.dump(pca, output_file)
 
-    # Convert the result to tensor
-    X_pc_full_train = tensor(X_pc_full_train, dtype=torch.float32)
+del X_tensor, scaler, X_scaled, pca, X_pc
 
-    del scaler, X_full_train_scaled , pca
-
-    best_model.train_(X_pc_full_train, Y_tensor[:, i].reshape(-1, 1))
-    best_model.save(DIR, label)
+# TRAIN AND SAVE THE  MODELS #
+for label, model in best_models.items():
+    model.train_(X_pc_tensor, Y_tensor[:, i].reshape(-1, 1))
+    model.save(DIR, label)
