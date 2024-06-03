@@ -52,8 +52,6 @@ def cross_validate(model, X, Y, strata, cv):
     for train_idx, val_idx in folds:
         fold += 1
 
-        print(train_idx, val_idx)
-
         # Make train-test split
         X_train, X_val = X[train_idx], X[val_idx]
         Y_train, Y_val = Y[train_idx], Y[val_idx]
