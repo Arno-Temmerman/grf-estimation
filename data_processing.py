@@ -198,7 +198,7 @@ def reformat(df, main_foot, other_foot):
 # Removes the distinction between left and right foot by creating a new DataFrame in terms of main_foot and other_foot
 def homogenize(df_l, df_r=None):
     # Single parameter version
-    if df_r == None:
+    if df_r is None:
         df = df_l
         df_l = reformat(df, 'l', 'r')
         df_r = reformat(df, 'r', 'l')
