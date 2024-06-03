@@ -1,7 +1,7 @@
 import joblib
 import torch
 import torch.nn as nn
-
+import data_processing as dp
 from models.mlp import MLP
 from torch import tensor
 
@@ -11,7 +11,7 @@ class STMRegressor(nn.Module):
 
         # Load scaler and PCA model
         self.scaler = joblib.load(f'{DIR}/scaler.pkl')
-        self.pca = joblib.load(f'{DIR}/PCA.pkl')
+        self.pca    = joblib.load(f'{DIR}/PCA.pkl')
 
         # Load submodel of each component
         self.Fx = MLP.load(DIR, 'Fx')
@@ -20,18 +20,9 @@ class STMRegressor(nn.Module):
         self.Tz = MLP.load(DIR, 'Tz')
 
 
-    def forward(self, input_features):
-        def rename_columns(df, main_foot, other_foot):
-            mapping = {col: col.replace("_" + main_foot, "")
-                               .replace("_" + other_foot, "_o")
-                       for col in df.columns}
-
-            return df.rename(columns=mapping)
-
-        # Split input_features by left and right foot
-        X_l = rename_columns(input_features, 'l', 'r')
-        X_r = rename_columns(input_features, 'r', 'l')
-        X_r = X_r[X_l.columns]
+    def forward(self, X):
+        # Homogenize features
+        X_l, X_r = dp.homogenize(X)
 
         # Normalize features
         X_l = self.scaler.transform(X_l.values)
@@ -44,7 +35,6 @@ class STMRegressor(nn.Module):
         # Convert to tensors
         X_pc_l_tensor = tensor(X_l_pc, dtype=torch.float32)
         X_pc_r_tensor = tensor(X_r_pc, dtype=torch.float32)
-
 
         # Make predictions for left foot
         Fx_l = self.Fx(X_pc_l_tensor)
