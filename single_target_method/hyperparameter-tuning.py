@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from torch import tensor
 
 
-EXCL_EMG = False
+EXCL_EMG = True
 
 if EXCL_EMG: FEATURES = 'excl_emg'
 else:        FEATURES = 'incl_emg'
@@ -27,7 +27,7 @@ SUBJECTS = ['AT', 'EL', 'MS', 'RB', 'RL', 'TT']
 SCENES = ['FlatWalkStraight', 'FlatWalkCircular', 'FlatWalkStatic']
 TRIALS = ('all')
 
-gait_cycles = dp.read_gait_cycles(DATA_DIR, SUBJECTS, SCENES, TRIALS, drop_emgs=(FEATURES == 'excl_emg'))
+gait_cycles = dp.read_gait_cycles(DATA_DIR, SUBJECTS, SCENES, TRIALS, drop_emgs=EXCL_EMG)
 
 DIR = f'results/{FEATURES}/{TRIALS}/' + time.strftime("%Y%m%d-%H%M%S/", time.localtime())
 
@@ -74,34 +74,34 @@ Y_tensor = torch.tensor(Y.to_numpy().reshape((-1, 4)), dtype=torch.float32)
 del X, Y
 
 
-##########################
-# CROSS-VALIDATION SPLIT #
-##########################
+# ##########################
+# # CROSS-VALIDATION SPLIT #
+# ##########################
 K = len(subjects.unique())
 kf = LeaveOneGroupOut()
 
 
-#########################
-# HYPERPARAMETER TUNING #
-#########################
-best_models = {}
+# #########################
+# # HYPERPARAMETER TUNING #
+# #########################
+best_hyperparams = {}
 
 for i, label in enumerate(LABELS):
     # 1. Define an objective function to be maximized
     def objective(trial):
         # 2. Suggest values for the hyperparameters using a trial object
         ## a. Number of layers
-        n_layers = trial.suggest_int('hidden_layers', 2, 2)
+        n_layers = trial.suggest_int('hidden_layers', 1, 2)
 
         ## b. Number of neurons per layer
         hidden_sizes = []
         for i in range(n_layers):
-            size = trial.suggest_int(f'hidden_size_{i}', 55, 55)
+            size = trial.suggest_int(f'hidden_size_{i}', 16, 64)
             hidden_sizes.append(size)
 
         # 3. Instantiate a model with suggested hyperparameters
         model = MLP(hidden_sizes)
-        trial.set_user_attr('model', model)
+        trial.set_user_attr('hidden_sizes', hidden_sizes)
 
         # 4. Cross-validate the suggested model
         mses, corrs = me.cross_validate(model, X_tensor, Y_tensor[:, i].reshape(-1, 1), subjects, kf)
@@ -113,16 +113,15 @@ for i, label in enumerate(LABELS):
     # 5. Create a study object and optimize the objective function.
     study = optuna.create_study(study_name=label, direction='minimize')
     study.set_user_attr('best_score', float('inf'))
-    study.optimize(objective, n_trials=1)
+    study.optimize(objective, n_trials=50)
 
     # Remember the best model
-    best_models[label] = study.best_trial.user_attrs['model']
+    best_hyperparams[label] = study.best_trial.user_attrs['hidden_sizes']
 
 
 #######################
 # PERSIST BEST MODELS #
 #######################
-
 # PERFORM PCA #
 # Normalize features so their variances are comparable
 scaler = StandardScaler()
@@ -148,6 +147,7 @@ with open(Path(DIR, 'PCA.pkl'), 'wb') as output_file:
 del X_tensor, scaler, X_scaled, pca, X_pc
 
 # TRAIN AND SAVE THE  MODELS #
-for label, model in best_models.items():
+for i, (label, hidden_sizes) in enumerate(best_hyperparams.items()):
+    model = MLP(hidden_sizes)
     model.train_(X_pc_tensor, Y_tensor[:, i].reshape(-1, 1))
     model.save(DIR, label)
