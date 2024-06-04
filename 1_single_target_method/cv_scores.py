@@ -2,12 +2,12 @@ import data_processing as dp
 import model_evaluation as me
 import numpy as np
 import pandas as pd
-import time
 import torch
 from models.mlp import MLP
 from sklearn.model_selection import StratifiedKFold, LeaveOneGroupOut
 
-EXCL_EMG = True
+INTER_SUBJECT = True
+EXCL_EMG = False
 
 if EXCL_EMG: FEATURES = 'excl_emg'
 else:        FEATURES = 'incl_emg'
@@ -16,7 +16,10 @@ else:        FEATURES = 'incl_emg'
 # LOADING THE DATA #
 ####################
 DATA_DIR = "../segmented_data/"
-SUBJECTS = [['AT', 'EL', 'MS', 'RB', 'RL', 'TT']]
+if INTER_SUBJECT:
+    if EXCL_EMG: SUBJECTS = [['AT', 'EL', 'MS', 'RB', 'RL', 'TT']]           # train one model on all training  subjects
+    else:        SUBJECTS = [['AT', 'MS', 'RB', 'RL', 'TT']]                 # noisy EMG signals for 'EL'
+else:            SUBJECTS = [['AT'], ['EL'], ['MS'], ['RB'], ['RL'], ['TT']] # train model for each subject individually
 SCENES = ['FlatWalkStraight', 'FlatWalkCircular', 'FlatWalkStatic']
 TRIALS = ('all')
 
@@ -48,8 +51,8 @@ for subject in SUBJECTS:
     Y = df_homogenous[LABELS]
 
     # Strata
-    strata = df_homogenous['trial']
-
+    if INTER_SUBJECT: strata = df_homogenous['subject']
+    else:             strata = df_homogenous['trial']
 
     ######################
     # CONVERT TO TENSORS #
@@ -61,16 +64,17 @@ for subject in SUBJECTS:
     ####################
     # CROSS VALIDATION #
     ####################
-    # K = 5
-    # kf = StratifiedKFold(n_splits=K, shuffle=True, random_state=42)
-
-    K = len(subject)
-    kf = LeaveOneGroupOut()
+    if INTER_SUBJECT:
+        K = len(subject)
+        kf = LeaveOneGroupOut()
+    else:
+        K = 5
+        kf = StratifiedKFold(n_splits=K, shuffle=True, random_state=42)
 
     models = {
-        'Fx': MLP([60]),
-        'Fy': MLP([56]),
-        'Fz': MLP([56, 29]),
+        'Fx': MLP([61]),
+        'Fy': MLP([60]),
+        'Fz': MLP([58]),
         'Tz': MLP([62]),
     }
 
@@ -81,8 +85,10 @@ for subject in SUBJECTS:
         nrmses = np.sqrt(mses) / range
 
         print(label)
-
         print(f'Errors: {np.mean(nrmses) * 100:.2f} ({np.std(nrmses) * 100:.2f})')
         print(f'Correlations: {np.mean(rs) * 100:.2f} ({np.std(rs) * 100:.2f})')
+        if INTER_SUBJECT:
+            print(nrmses)
+            print(rs)
 
 

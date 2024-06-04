@@ -44,7 +44,7 @@ def cross_validate(model, X, Y, strata, cv):
     if isinstance(cv, StratifiedKFold):
         folds = cv.split(X, strata)
     elif isinstance(cv, LeaveOneGroupOut):
-        folds = cv.split(X, Y, strata)
+        folds = cv.split(X, groups=strata)
     elif isinstance(cv, GroupKFold):
         folds = cv.split(X, groups=strata)
 

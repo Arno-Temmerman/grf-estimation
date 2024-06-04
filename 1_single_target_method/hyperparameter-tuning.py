@@ -9,7 +9,7 @@ import torch
 from models.mlp import MLP
 from pathlib import Path
 from sklearn.decomposition import PCA
-from sklearn.model_selection import GroupKFold, LeaveOneGroupOut
+from sklearn.model_selection import LeaveOneGroupOut
 from sklearn.preprocessing import StandardScaler
 from torch import tensor
 
@@ -23,13 +23,12 @@ else:        FEATURES = 'incl_emg'
 # LOADING THE DATA #
 ####################
 DATA_DIR = "../segmented_data/"
-SUBJECTS = ['AT', 'EL', 'MS', 'RB', 'RL', 'TT']
+if EXCL_EMG: SUBJECTS = ['AT', 'EL', 'MS', 'RB', 'RL', 'TT']
+else:        SUBJECTS = ['AT', 'MS', 'RB', 'RL', 'TT']
 SCENES = ['FlatWalkStraight', 'FlatWalkCircular', 'FlatWalkStatic']
 TRIALS = ('all')
 
 gait_cycles = dp.read_gait_cycles(DATA_DIR, SUBJECTS, SCENES, TRIALS, drop_emgs=EXCL_EMG)
-
-DIR = f'results/{FEATURES}/{TRIALS}/' + time.strftime("%Y%m%d-%H%M%S/", time.localtime())
 
 
 ############################
@@ -77,7 +76,7 @@ del X, Y
 # ##########################
 # # CROSS-VALIDATION SPLIT #
 # ##########################
-K = len(subjects.unique())
+K = len(SUBJECTS)
 kf = LeaveOneGroupOut()
 
 
@@ -122,6 +121,8 @@ for i, label in enumerate(LABELS):
 #######################
 # PERSIST BEST MODELS #
 #######################
+DIR = f'results/{FEATURES}/{TRIALS}/' + time.strftime("%Y%m%d-%H%M%S/", time.localtime())
+
 # PERFORM PCA #
 # Normalize features so their variances are comparable
 scaler = StandardScaler()
