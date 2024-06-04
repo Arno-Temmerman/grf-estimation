@@ -5,10 +5,9 @@ import pandas as pd
 import time
 import torch
 from models.mlp import MLP
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, LeaveOneGroupOut
 
-
-EXCL_EMG = False
+EXCL_EMG = True
 
 if EXCL_EMG: FEATURES = 'excl_emg'
 else:        FEATURES = 'incl_emg'
@@ -17,7 +16,7 @@ else:        FEATURES = 'incl_emg'
 # LOADING THE DATA #
 ####################
 DATA_DIR = "../segmented_data/"
-SUBJECTS = [['AT'], ['EL'], ['MS'], ['RB'], ['RL'], ['TT']]
+SUBJECTS = [['AT', 'EL', 'MS', 'RB', 'RL', 'TT']]
 SCENES = ['FlatWalkStraight', 'FlatWalkCircular', 'FlatWalkStatic']
 TRIALS = ('all')
 
@@ -62,12 +61,20 @@ for subject in SUBJECTS:
     ####################
     # CROSS VALIDATION #
     ####################
-    K = 5
-    kf = StratifiedKFold(n_splits=K, shuffle=True, random_state=42)
+    # K = 5
+    # kf = StratifiedKFold(n_splits=K, shuffle=True, random_state=42)
 
-    for i, label in enumerate(LABELS):
-        model = MLP([40])
+    K = len(subject)
+    kf = LeaveOneGroupOut()
 
+    models = {
+        'Fx': MLP([60]),
+        'Fy': MLP([56]),
+        'Fz': MLP([56, 29]),
+        'Tz': MLP([62]),
+    }
+
+    for i, (label, model) in enumerate(models.items()):
         y = Y_tensor[:, i].reshape(-1, 1)
         range = (torch.quantile(y, 0.99) - torch.quantile(y, 0.01)).item()
         mses, rs = me.cross_validate(model, X_tensor, y, strata, kf)
