@@ -96,12 +96,12 @@ for i, label in enumerate(LABELS):
         ## b. Number of neurons per layer
         hidden_sizes = []
         for i in range(n_layers):
-            size = trial.suggest_int(f'hidden_size_{i}', 16 * 4, 64 * 4)
+            size = trial.suggest_int(f'hidden_size_{i}', 32 * 4, 64 * 4)
             hidden_sizes.append(size)
 
         # 3. Instantiate a model with suggested hyperparameters
         model = MLP(hidden_sizes)
-        trial.set_user_attr('model', model)
+        trial.set_user_attr('hidden_sizes', hidden_sizes)
 
         # 4. Cross-validate the suggested model
         mses, corrs = me.cross_validate(model, X_tensor, Y_tensor.reshape(-1, 4), subjects, kf)
@@ -116,45 +116,37 @@ for i, label in enumerate(LABELS):
     study.optimize(objective, n_trials=50)
 
     # Remember the best model
-    best_models[label] = study.best_trial.user_attrs['model']
+    best_hyperparams = study.best_trial.user_attrs['hidden_sizes']
 
 
-#######################
-# PERSIST BEST MODELS #
-#######################
-# best_models = {
-#     "Fx": MLP([52, 52]),
-#     "Fy": MLP([52, 52]),
-#     "Fz": MLP([52, 52]),
-#     "Tz": MLP([52, 52])
-# }
-#
-#
-# # PERFORM PCA #
-# # Normalize features so their variances are comparable
-# scaler = StandardScaler()
-# scaler.fit(X_tensor)
-# X_scaled = scaler.transform(X_tensor)
-#
-# # Fit PCA model to the training data for capturing 99% of the variance
-# pca = PCA(n_components=0.99, svd_solver='full')
-# pca.fit(X_scaled)
-# X_pc = pca.transform(X_scaled)
-# X_pc_tensor = tensor(X_pc, dtype=torch.float32)
-#
-# # Persist both models
-# Path(DIR).mkdir(parents=True, exist_ok=True)
-# # Save the scaler to a file
-# with open(Path(DIR, 'scaler.pkl'), 'wb') as output_file:
-#     joblib.dump(scaler, output_file)
-#
-# # Save the PCA model to a file
-# with open(Path(DIR, 'PCA.pkl'), 'wb') as output_file:
-#     joblib.dump(pca, output_file)
-#
-# del X_tensor, scaler, X_scaled, pca, X_pc
-#
-# # TRAIN AND SAVE THE  MODELS #
-# for i, (label, model) in enumerate(best_models.items()):
-#     model.train_(X_pc_tensor, Y_tensor[:, i].reshape(-1, 1))
-#     model.save(DIR, label)
+######################
+# PERSIST BEST MODEL #
+######################
+# PERFORM PCA #
+# Normalize features so their variances are comparable
+scaler = StandardScaler()
+scaler.fit(X_tensor)
+X_scaled = scaler.transform(X_tensor)
+
+# Fit PCA model to the training data for capturing 99% of the variance
+pca = PCA(n_components=0.99, svd_solver='full')
+pca.fit(X_scaled)
+X_pc = pca.transform(X_scaled)
+X_pc_tensor = tensor(X_pc, dtype=torch.float32)
+
+# Persist both models
+Path(DIR).mkdir(parents=True, exist_ok=True)
+# Save the scaler to a file
+with open(Path(DIR, 'scaler.pkl'), 'wb') as output_file:
+    joblib.dump(scaler, output_file)
+
+# Save the PCA model to a file
+with open(Path(DIR, 'PCA.pkl'), 'wb') as output_file:
+    joblib.dump(pca, output_file)
+
+del X_tensor, scaler, X_scaled, pca, X_pc
+
+# TRAIN AND SAVE THE  MODELS #
+model = MLP(best_hyperparams)
+model.train_(X_pc_tensor, Y_tensor[:, i].reshape(-1, 1))
+model.save(DIR, 'Y')
