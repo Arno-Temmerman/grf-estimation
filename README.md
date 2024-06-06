@@ -1,6 +1,6 @@
 # Full GRF Estimation
 
-This repoistory contains the code implemented for my thesis "**Estimating Ground Reaction Force Based on Pressure and Innertia Measured by Smart Insoles** - A Deep Learning Approach"
+This repository contains the source code implemented for my thesis "**Estimating Ground Reaction Force Based on Pressure and Innertia Measured by Smart Insoles** - A Deep Learning Approach"
 I compared three multi-output regression methods for making these estimations:
 1. single-target method
 2. stacking
