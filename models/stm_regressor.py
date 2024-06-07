@@ -7,11 +7,13 @@ from torch import tensor
 
 class STMRegressor(nn.Module):
     def __init__(self, DIR):
-        super(STMRegressor, self).__init__()
+        super().__init__()
 
         # Load scaler and PCA model
         self.scaler = joblib.load(f'{DIR}/scaler.pkl')
         self.pca    = joblib.load(f'{DIR}/PCA.pkl')
+
+        # print(f'STMRegressor has input size {self.pca.}')
 
         # Load submodel of each component
         self.Fx = MLP.load(DIR, 'Fx')
@@ -52,5 +54,8 @@ class STMRegressor(nn.Module):
                               Fx_r, Fy_r, Fz_r, Tz_r], dim=1)
 
         return Y
+
+
+
 
 

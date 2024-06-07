@@ -145,6 +145,8 @@ class MLP(nn.Module):
                     hidden_sizes.append(np.shape(value)[1])
                     output_size = np.shape(value)[0]
 
+        print(f'MLP {save_name} has {input_size} input neurons, {hidden_sizes} hidden neurons and {output_size} output neurons.')
+
         # Reconstruct MLP object
         mlp = cls(hidden_sizes)
         mlp.__input_stack = Linear(input_size, mlp.hidden_sizes[0])
