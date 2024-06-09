@@ -11,7 +11,7 @@ from loss_functions.nrmse_loss import NRMSELoss
 ########################
 # EVALUATING THE MODEL #
 ########################
-def print_metrics(y_test, y_pred):
+def print_metrics(y_test, y_pred, scatterplot=True):
     print('Performance on the test set:')
 
     # NRMSE
@@ -28,11 +28,12 @@ def print_metrics(y_test, y_pred):
     print('r =', r[0, 1])
 
     # Scatterplot
-    plt.figure(figsize=(3, 3))
-    plt.xlabel('y_test')
-    plt.ylabel('y_pred')
-    plt.scatter(y_test, y_pred, s=5)
-    plt.show()
+    if scatterplot:
+        plt.figure(figsize=(3, 3))
+        plt.xlabel('y_test')
+        plt.ylabel('y_pred')
+        plt.scatter(y_test, y_pred, s=5)
+        plt.show()
 
 
 ####################
@@ -75,7 +76,8 @@ def cross_validate(model, X, Y, strata, cv):
 # CORRELATION #
 ###############
 def plot_correlations(Y_test, Y_pred):
-    fig, axs = plt.subplots(2, 4, figsize=(12, 9), sharey='col')
+    fig, axs = plt.subplots(2, 4, figsize=(12, 6), sharey='col')
+    plt.tight_layout()
 
     LABELS = ['Fx_l', 'Fy_l', 'Fz_l', 'Tz_l',
               'Fx_r', 'Fy_r', 'Fz_r', 'Tz_r']
@@ -90,11 +92,7 @@ def plot_correlations(Y_test, Y_pred):
 
         # Scatterplot
         scatterplot = axs[i // 4, i % 4]
-        scatterplot.set_title(f'{label} {r}')
-        scatterplot.set_xlabel(f'{label}_test')
-        scatterplot.set_ylabel(f'{label}_pred')
-        scatterplot.set_xlim(np.min(y_test), np.max(y_test))
-        scatterplot.set_ylim(np.min(y_pred), np.max(y_pred))
-        scatterplot.scatter(y_test, y_pred, s=5, color=COLORS[i % 4])
+        scatterplot.scatter(y_test, y_pred, s=1, color=COLORS[i % 4], rasterized=True)
+        scatterplot.set_box_aspect(1)
 
     plt.show()
