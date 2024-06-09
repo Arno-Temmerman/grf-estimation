@@ -7,7 +7,7 @@ from models.mlp import MLP
 from sklearn.model_selection import StratifiedKFold, LeaveOneGroupOut
 
 INTER_SUBJECT = True
-EXCL_EMG = False
+EXCL_EMG = True
 
 if EXCL_EMG: FEATURES = 'excl_emg'
 else:        FEATURES = 'incl_emg'

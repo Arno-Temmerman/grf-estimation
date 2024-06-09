@@ -73,16 +73,16 @@ Y_tensor = torch.tensor(Y.to_numpy().reshape((-1, 4)), dtype=torch.float32)
 del X, Y
 
 
-# ##########################
-# # CROSS-VALIDATION SPLIT #
-# ##########################
+##########################
+# CROSS-VALIDATION SPLIT #
+##########################
 K = len(SUBJECTS)
 kf = LeaveOneGroupOut()
 
 
-# #########################
-# # HYPERPARAMETER TUNING #
-# #########################
+#########################
+# HYPERPARAMETER TUNING #
+#########################
 best_hyperparams = {}
 
 for i, label in enumerate(LABELS):
@@ -95,7 +95,7 @@ for i, label in enumerate(LABELS):
         ## b. Number of neurons per layer
         hidden_sizes = []
         for i in range(n_layers):
-            size = trial.suggest_int(f'hidden_size_{i}', 16, 64)
+            size = trial.suggest_int(f'hidden_size_{i}', 32, 64)
             hidden_sizes.append(size)
 
         # 3. Instantiate a model with suggested hyperparameters
