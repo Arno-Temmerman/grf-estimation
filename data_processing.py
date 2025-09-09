@@ -93,11 +93,11 @@ def read_gait_cycles(data_dir, subjects, scenes, trials, drop_emgs=False):
     print(f'Reading {trials} trials of {subjects}.')
 
     for subdirs in itertools.product(subjects, scenes):
-        path = data_dir + '/'.join(subdirs)
+        path = os.path.join(data_dir, *subdirs)
 
         for file in os.listdir(path):
             if file.endswith('.csv') and (file.startswith(trials) or trials == ('all')):
-                filepath = path + '/' + file
+                filepath = os.path.join(path, file)
                 gait_cycle = read_gait_cycle(filepath)
                 gait_cycle['subject'] = subdirs[0]
                 gait_cycle['trial'] = file
