@@ -259,7 +259,7 @@ def perform_pca(X_train, X_test, save_dir=None):
     # Save the scaler to a file
     if save_dir:
         Path(save_dir).mkdir(parents=True, exist_ok=True)
-        with open(Path(save_dir, 'scaler.pkl'), 'wb') as output_file:
+        with open(Path(save_dir, 'standard_scaler.pkl'), 'wb') as output_file:
             joblib.dump(scaler, output_file)
 
 
@@ -274,7 +274,7 @@ def perform_pca(X_train, X_test, save_dir=None):
     # Save the PCA model to a file
     if save_dir:
         Path(save_dir).mkdir(parents=True, exist_ok=True)
-        with open(Path(save_dir, 'PCA.pkl'), 'wb') as output_file:
+        with open(Path(save_dir, 'pca.pkl'), 'wb') as output_file:
             joblib.dump(pca, output_file)
 
 

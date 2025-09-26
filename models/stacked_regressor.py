@@ -12,8 +12,8 @@ class StackedRegressor(nn.Module):
         super(StackedRegressor, self).__init__()
 
         # Load scaler and PCA model
-        self.scaler = joblib.load(f'{DIR}/scaler.pkl')
-        self.pca    = joblib.load(f'{DIR}/PCA.pkl')
+        self.scaler = joblib.load(f'{DIR}/standard_scaler.pkl')
+        self.pca    = joblib.load(f'{DIR}/pca.pkl')
 
         # Load base model of each component
         self.Fx = MLP.load(DIR, 'Fx_base')

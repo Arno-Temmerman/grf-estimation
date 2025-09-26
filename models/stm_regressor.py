@@ -10,8 +10,8 @@ class STMRegressor(nn.Module):
         super().__init__()
 
         # Load scaler and PCA model
-        self.scaler = joblib.load(f'{DIR}/scaler.pkl')
-        self.pca    = joblib.load(f'{DIR}/PCA.pkl')
+        self.scaler = joblib.load(f'{DIR}/standard_scaler.pkl')
+        self.pca    = joblib.load(f'{DIR}/pca.pkl')
 
         # print(f'STMRegressor has input size {self.pca.}')
 

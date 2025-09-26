@@ -138,11 +138,11 @@ X_pc_tensor = tensor(X_pc, dtype=torch.float32)
 # Persist both models
 Path(DIR).mkdir(parents=True, exist_ok=True)
 # Save the scaler to a file
-with open(Path(DIR, 'scaler.pkl'), 'wb') as output_file:
+with open(Path(DIR, 'standard_scaler.pkl'), 'wb') as output_file:
     joblib.dump(scaler, output_file)
 
 # Save the PCA model to a file
-with open(Path(DIR, 'PCA.pkl'), 'wb') as output_file:
+with open(Path(DIR, 'pca.pkl'), 'wb') as output_file:
     joblib.dump(pca, output_file)
 
 del X_tensor, scaler, X_scaled, pca, X_pc
