@@ -24,3 +24,12 @@ This contains a jupyter notebook contains a simplified version of the experiment
 It was made for the course "Statistical Foundations of Machine Learning".
 
 
+## Getting Started
+
+The `train.py` and `test.py` scripts have been added to easily reproduce the results from my thesis.
+To get started, clone this repo and open the `grf-estimation/` directory in terminal.
+From there, running the `make` command will install all necessary requirements, and train and test the best performing inter-subject model.
+The model and test results will be saved in the `results/` directory.
+
+To train and test different models, you can run the `train.py` and `test.py` scripts with different parameters.
+To list all possible parameters use `--help` (e.g. `python train.py --help`).
