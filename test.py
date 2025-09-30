@@ -8,13 +8,13 @@ from model_evaluation import *
 
 # Argument Parser
 parser = argparse.ArgumentParser()
-parser.add_argument("--method", type=str, default="single_target")
-parser.add_argument("--model", type=str, default="latest")
-parser.add_argument("--data", type=str, default="./segmented_data", help="Root directory of the data")
-parser.add_argument("--subjects", type=str, default=["HH"], nargs="+")
-parser.add_argument("--scenes", type=str, default=['FlatWalkStraight', 'FlatWalkCircular', 'FlatWalkStatic'], nargs="+")
+parser.add_argument("-me", "--method", type=str, default="single_target", help="The multi-output regression method used in the architecture. Choose between single_target and multi_task.")
+parser.add_argument("-mo", "--model", type=str, default="latest", help="Name of the directory of the model to be tested (format: YYYYMMDD-HHMMSS-[inter|intra]_subject-insoles[_emg])")
+parser.add_argument("-d", "--data", type=str, default="./segmented_data", help="Root directory of the data")
+parser.add_argument("-su", "--subjects", type=str, default=["HH"], nargs="+", help="List of strings specifying the subject data directories to use for training. Default is [\"AT\", \"EL\", \"MS\", \"RB\", \"RL\", \"TT\"].")
+parser.add_argument("-sc", "--scenes", type=str, default=["FlatWalkStraight", "FlatWalkCircular", "FlatWalkStatic"], nargs="+", help="List of strings specifying the scenes to use for training.")
 parser.add_argument("-t", "--trials", type=str, default=["all"], nargs="+", help="Tuple of strings specifying the trials to use for training.")
-parser.add_argument("--include-emg", action="store_true", default=False, help="Include data measured by sEMG sensors in features.")
+parser.add_argument("-emg", "--include-emg", action="store_true", default=False, help="Flag used to in-/exclude data measured by sEMG sensors in feature selection.")
 
 
 LABELS = ['Fx_l', 'Fy_l', 'Fz_l', 'Tz_l',

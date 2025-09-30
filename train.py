@@ -11,15 +11,15 @@ LABELS = ["Fx",   "Fy",   "Fz",   "Tz",
 
 # Argument Parser
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("-m", "--method", type=str, default="single_target", help="")
+parser.add_argument("-m", "--method", type=str, default="single_target", help="The multi-output regression method used in the architecture. Choose between single_target and multi_task.")
 parser.add_argument("-Fx", "--hidden-layers-Fx", type=int, default=[61], nargs="+", help="List of integers specifying the number of neurons in each hidden layer for Fx MLP.")
 parser.add_argument("-Fy", "--hidden-layers-Fy", type=int, default=[60], nargs="+", help="List of integers specifying the number of neurons in each hidden layer for Fy MLP.")
 parser.add_argument("-Fz", "--hidden-layers-Fz", type=int, default=[58], nargs="+", help="List of integers specifying the number of neurons in each hidden layer for Fz MLP.")
 parser.add_argument("-Tz", "--hidden-layers-Tz", type=int, default=[62], nargs="+", help="List of integers specifying the number of neurons in each hidden layer for Tz MLP.")
 parser.add_argument("-Y", "--hidden-layers-Y", type=int, default=[241], nargs="+", help="List of integers specifying the number of neurons in each hidden layer for Y MLP.")
 parser.add_argument("-d", "--data", type=str, default="segmented_data", help="Root directory of the data. Default is segmented_data.")
-parser.add_argument("--subjects", type=str, default=["AT", "EL", "MS", "RB", "RL", "TT"], nargs="+", help="List of strings specifying the subject data directories to use for training. Default is [\"AT\", \"EL\", \"MS\", \"RB\", \"RL\", \"TT\"].")
-parser.add_argument("--scenes", type=str, default=["FlatWalkStraight", "FlatWalkCircular", "FlatWalkStatic"], nargs="+", help="List of strings specifying the scenes to use for training.")
+parser.add_argument("-su", "--subjects", type=str, default=["AT", "EL", "MS", "RB", "RL", "TT"], nargs="+", help="List of strings specifying the subject data directories to use for training. Default is [\"AT\", \"EL\", \"MS\", \"RB\", \"RL\", \"TT\"].")
+parser.add_argument("-sc", "--scenes", type=str, default=["FlatWalkStraight", "FlatWalkCircular", "FlatWalkStatic"], nargs="+", help="List of strings specifying the scenes to use for training.")
 parser.add_argument("-t", "--trials", type=str, default=["all"], nargs="+", help="Tuple of strings specifying the trials to use for training.")
 parser.add_argument("-emg", "--include-emg", action="store_true", default=False, help="Flag used to in-/exclude data measured by sEMG sensors in feature selection.")
 
