@@ -20,18 +20,20 @@ parser.add_argument("-Y", "--hidden-layers-Y", type=int, default=[241], nargs="+
 parser.add_argument("-d", "--data", type=str, default="segmented_data", help="Root directory of the data. Default is segmented_data.")
 parser.add_argument("--subjects", type=str, default=["AT", "EL", "MS", "RB", "RL", "TT"], nargs="+", help="List of strings specifying the subject data directories to use for training. Default is [\"AT\", \"EL\", \"MS\", \"RB\", \"RL\", \"TT\"].")
 parser.add_argument("--scenes", type=str, default=["FlatWalkStraight", "FlatWalkCircular", "FlatWalkStatic"], nargs="+", help="List of strings specifying the scenes to use for training.")
-parser.add_argument("-t", "--trials", type=str, default=("all"), nargs="+", help="Tuple of strings specifying the trials to use for training.")
+parser.add_argument("-t", "--trials", type=str, default=["all"], nargs="+", help="Tuple of strings specifying the trials to use for training.")
 parser.add_argument("-emg", "--include-emg", action="store_true", default=False, help="Flag used to in-/exclude data measured by sEMG sensors in feature selection.")
 
 
 if __name__ == "__main__":
     args = parser.parse_args()
 
+    trials = args.trials[0] if len(args.trials) == 1 else tuple(args.trials)
+
     # Load Data
     gait_cycles = read_gait_cycles(data_dir=args.data, 
                                    subjects=args.subjects,
                                    scenes=args.scenes, 
-                                   trials=args.trials,
+                                   trials=args.trials[0] if len(args.trials) == 1 else tuple(args.trials),
                                    drop_emgs=not args.include_emg)
     match args.method:
         case "single_target":
@@ -51,7 +53,7 @@ if __name__ == "__main__":
     # Make directory for model persistence
     SUBJECTS = "intra_subject" if len(args.subjects) == 1 else "inter_subject"
     FEATURES = "insoles_emg" if args.include_emg else "insoles"
-    DIR = os.path.join("results", SUBJECTS, args.method, FEATURES, args.trials, time.strftime("%Y%m%d-%H%M%S", time.localtime()))
+    DIR = os.path.join("results", args.method, time.strftime(f"%Y%m%d-%H%M%S-{SUBJECTS}-{FEATURES}", time.localtime()))
     Path(DIR).mkdir(parents=True, exist_ok=True)
 
     # Normalize features so their variances are comparable

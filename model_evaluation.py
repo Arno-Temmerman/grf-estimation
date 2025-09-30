@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import torch
 from sklearn.model_selection import StratifiedKFold, GroupKFold, LeaveOneGroupOut
 
@@ -11,14 +12,14 @@ from loss_functions.nrmse_loss import NRMSELoss
 ########################
 # EVALUATING THE MODEL #
 ########################
-def print_metrics(y_test, y_pred, scatterplot=True):
+def log_metrics(y_test, y_pred, scatterplot=True, log_file=None):
     print('Performance on the test set:')
 
     # NRMSE
     range = torch.quantile(y_test, 0.99) - torch.quantile(y_test, 0.01)
     loss = NRMSELoss([range])
     test_loss = loss(y_test, y_pred)
-    print(f'NRMSE = {test_loss.item():.4f}')
+    log(f'NRMSE = {test_loss.item():.4f}', log_file)
 
     y_test = y_test.detach().squeeze().numpy()
     y_pred = y_pred.detach().squeeze().numpy()
@@ -34,6 +35,13 @@ def print_metrics(y_test, y_pred, scatterplot=True):
         plt.ylabel('y_pred')
         plt.scatter(y_test, y_pred, s=5)
         plt.show()
+
+
+def log(message, log_file=None):
+    if log_file:
+        with open(log_file, "a") as output_file:
+            print(message, file=output_file)
+    print(message)
 
 
 ####################
@@ -75,7 +83,8 @@ def cross_validate(model, X, Y, strata, cv):
 ###############
 # CORRELATION #
 ###############
-def plot_correlations(Y_test, Y_pred):
+def plot_correlations(Y_test, Y_pred, log_dir):
+    print(Y_test.shape[0])
     fig, axs = plt.subplots(2, 4, figsize=(12, 6), sharey='col')
     plt.tight_layout()
 
@@ -92,7 +101,10 @@ def plot_correlations(Y_test, Y_pred):
 
         # Scatterplot
         scatterplot = axs[i // 4, i % 4]
-        scatterplot.scatter(y_test, y_pred, s=1, color=COLORS[i % 4], rasterized=True)
+        scatterplot.set_title(label)
+        scatterplot.scatter(y_test, y_pred, s=1, color=COLORS[i % 4], rasterized=True, alpha=0.1)
         scatterplot.set_box_aspect(1)
 
     plt.show()
+    if log_dir:
+        fig.savefig(os.path.join(log_dir, "correlation_plots.svg"))
